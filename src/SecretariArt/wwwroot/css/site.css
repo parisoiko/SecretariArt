@@ -85,6 +85,7 @@ h1, h2, h3, .navbar-brand, .auth-brand { font-family: "Fraunces", Georgia, serif
 .status-pill { font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.65rem; border-radius: 1rem; white-space: nowrap; }
 .status-pending { background: #fff4d6; color: #8a6200; }
 .status-rejected { background: #fbe4e4; color: #9b2c2c; }
+.status-active { background: #e3f4ea; color: #1f6b43; }
 
 .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem; }
 .action-card {
@@ -103,6 +104,26 @@ h1, h2, h3, .navbar-brand, .auth-brand { font-family: "Fraunces", Georgia, serif
 .table-card { overflow: hidden; }
 .table-card .table th { background: #f3eff8; font-weight: 600; font-size: 0.85rem; color: var(--sa-muted); }
 
+/* On phones a wide table hides its right-hand columns (often the buttons) behind a sideways scroll.
+   .table-stack turns each row into a small card instead: one line per cell, labelled from data-label. */
+@media (max-width: 575.98px) {
+    .table-stack thead { display: none; }
+    .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+    .table-stack tr { padding: 0.5rem 0; border-bottom: 1px solid var(--sa-line); }
+    .table-stack tr:last-child { border-bottom: 0; }
+    /* Block, not flex: a cell often holds a value plus a second line (city, email, phone), which must stay stacked
+       under it rather than become a squeezed column of its own. The label sits in the reserved left padding. */
+    .table-stack td {
+        position: relative; padding: 0.3rem 1rem 0.3rem 8.5rem; border: 0; text-align: right; overflow-wrap: break-word;
+    }
+    .table-stack td[data-label]::before {
+        content: attr(data-label); position: absolute; left: 1rem; top: 0.4rem; text-align: left;
+        font-weight: 600; font-size: 0.85rem; color: var(--sa-muted);
+    }
+    .table-stack td.table-actions { padding-left: 1rem; padding-top: 0.5rem; }
+    .table-stack td:empty { display: none; }
+}
+
 .invite-panel { padding: 1.25rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .invite-code {
     font-family: ui-monospace, "Cascadia Code", monospace; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.12em;
@@ -110,6 +131,8 @@ h1, h2, h3, .navbar-brand, .auth-brand { font-family: "Fraunces", Georgia, serif
 }
 .invite-link { max-width: 28rem; font-size: 0.9rem; }
 .code-input { text-transform: uppercase; letter-spacing: 0.1em; font-family: ui-monospace, "Cascadia Code", monospace; }
+/* Codes are shown in capitals as typed; the "e.g." hint isn't a code. */
+.code-input::placeholder { text-transform: none; letter-spacing: normal; }
 
 .role-options { display: flex; gap: 0.75rem; }
 .role-option { flex: 1; cursor: pointer; }

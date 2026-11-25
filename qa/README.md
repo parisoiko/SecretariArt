@@ -10,7 +10,7 @@ powershell -File qa/start-qa-app.ps1          # add -Reset to start again from a
 
 **Terminal 2: the tester** (from the repo root):
 ```powershell
-claude --mcp-config qa/playwright.mcp.json --allowedTools "mcp__playwright__*" "Read" "Write(qa/reports/**)" "Edit(qa/reports/**)" -- "Read qa/TESTER.md and follow it."
+claude --mcp-config qa/playwright.mcp.json --allowedTools "mcp__playwright__*" "Read" "Edit(qa/reports/**)" -- "Read qa/TESTER.md and follow it."
 ```
 
 The QA platform admin is `qa-platform@test.secretariart.app` / `QaTest!2026`. Results go to `qa/reports/` (not in

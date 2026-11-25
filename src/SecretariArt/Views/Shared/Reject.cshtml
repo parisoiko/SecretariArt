@@ -1,0 +1,26 @@
+@model RejectViewModel
+@{
+    ViewData["Title"] = Model.Heading;
+}
+
+<div class="narrow">
+    <header class="page-header">
+        <h1>@Model.Heading</h1>
+        <p>@Model.Details</p>
+    </header>
+
+    @* Posts back to this page's own address, so the same view serves join requests and organisation requests. *@
+    <form method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <div class="mb-4">
+            <label asp-for="Reason" class="form-label">Reason (the person will see this)</label>
+            <textarea asp-for="Reason" class="form-control" rows="3" maxlength="@RejectionReasons.MaxLength"
+                      placeholder="e.g. Our classes for this year are full; please ask again in September." autofocus></textarea>
+            <span asp-validation-for="Reason" class="invalid-feedback d-block"></span>
+        </div>
+        <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg"></i> Reject request</button>
+        <a class="btn btn-link" href="@Model.CancelUrl">Cancel</a>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

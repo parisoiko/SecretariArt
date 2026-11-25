@@ -1,4 +1,10 @@
 @* Client-side validation from the same data annotations the server checks. *@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.21.0/dist/jquery.validate.min.js"></script>
+<script>
+    // No checking when a field loses focus: pressing Send blurs the field, its message pushes the button down
+    // before the mouse is released, and the click misses (seen in QA). Fields are still checked on submit, and
+    // re-checked as you type once they've been flagged.
+    $.validator.setDefaults({ onfocusout: false });
+</script>
 <script src="https://cdn.jsdelivr.net/npm/jquery-validation-unobtrusive@4.0.0/dist/jquery.validate.unobtrusive.min.js"></script>

@@ -39,23 +39,33 @@
     else
     {
         <div class="table-responsive table-card">
-            <table class="table align-middle mb-0">
+            <table class="table align-middle mb-0 table-stack">
                 <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Asked</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var membership in Model.Pending)
                     {
+                        string role = membership.Role.ToString().ToLowerInvariant();
                         <tr>
-                            <td><strong>@membership.User!.FullName</strong></td>
-                            <td><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
-                            <td>@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
-                            <td class="text-nowrap">@membership.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
-                            <td class="text-end text-nowrap">
+                            <td data-label="Name">
+                                <strong>@membership.User!.FullName</strong>
+                                @if (membership.LastRejectedAt is DateTime rejectedAt)
+                                {
+                                    @* They asked again after being turned down: say so, so the admin decides knowingly. *@
+                                    <div class="text-danger small">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Rejected before, on @rejectedAt.ToLocalTime().ToString("d MMM yyyy")@(membership.RejectionReason is string reason ? $": {reason}" : "")
+                                    </div>
+                                }
+                            </td>
+                            <td data-label="Role"><span class="role-badge role-@role">@membership.Role</span></td>
+                            <td data-label="Contact">@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
+                            <td data-label="Asked" class="text-nowrap">@membership.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                            <td class="text-end text-nowrap table-actions">
                                 <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
                                     <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Approve</button>
                                 </form>
-                                <form asp-action="Reject" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
-                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> Reject</button>
-                                </form>
+                                @* A page of its own: it names the person and asks for the reason they'll see. *@
+                                <a class="btn btn-sm btn-outline-danger" asp-action="Reject" asp-route-organizationId="@Model.Organization.Id"
+                                   asp-route-membershipId="@membership.Id"><i class="bi bi-x-lg"></i> Reject</a>
                             </td>
                         </tr>
                     }
@@ -65,22 +75,70 @@
     }
 </section>
 
-<section>
-    <h2 class="section-title">Members <span class="badge text-bg-secondary">@Model.Active.Count</span></h2>
+@{
+    // One row per person, with a badge for each role they hold here.
+    var people = Model.Active
+        .GroupBy(m => m.UserId)
+        .OrderBy(g => g.Min(m => m.Role)).ThenBy(g => g.First().User!.LastName).ThenBy(g => g.First().User!.FirstName)
+        .ToList();
+}
+<section class="mb-4">
+    <h2 class="section-title">Members <span class="badge text-bg-secondary">@people.Count</span></h2>
     <div class="table-responsive table-card">
-        <table class="table align-middle mb-0">
+        <table class="table align-middle mb-0 table-stack">
             <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead>
             <tbody>
-                @foreach (var membership in Model.Active.OrderBy(m => m.Role))
+                @foreach (var person in people)
                 {
+                    ApplicationUser user = person.First().User!;
                     <tr>
-                        <td>@membership.User!.FullName</td>
-                        <td><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
-                        <td>@membership.User.Email</td>
-                        <td>@membership.User.PhoneNumber</td>
+                        <td data-label="Name">@user.FullName</td>
+                        <td data-label="Role">
+                            @foreach (var membership in person.OrderBy(m => m.Role))
+                            {
+                                <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                            }
+                        </td>
+                        <td data-label="Email">@user.Email</td>
+                        <td data-label="Phone">@user.PhoneNumber</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 </section>
+
+@if (Model.Rejected.Count > 0)
+{
+    <section>
+        <h2 class="section-title">Not approved</h2>
+        <p class="text-muted">The most recent requests you rejected. Approve one if it was a mistake.</p>
+        <div class="table-responsive table-card">
+            <table class="table align-middle mb-0 table-stack">
+                <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Rejected</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var membership in Model.Rejected)
+                    {
+                        <tr>
+                            <td data-label="Name">
+                                @membership.User!.FullName
+                                @if (membership.RejectionReason != null)
+                                {
+                                    <div class="text-muted small">@membership.RejectionReason</div>
+                                }
+                            </td>
+                            <td data-label="Role"><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
+                            <td data-label="Contact">@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
+                            <td data-label="Rejected" class="text-nowrap">@membership.DecidedAt?.ToLocalTime().ToString("d MMM yyyy")</td>
+                            <td class="text-end text-nowrap table-actions">
+                                <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
+                                    <button class="btn btn-sm btn-outline-success"><i class="bi bi-check-lg"></i> Approve after all</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

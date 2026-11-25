@@ -1,0 +1,14 @@
+@model string
+@* Shared header for the platform pages; the model is the active tab ("waiting" or "all"). *@
+<header class="page-header">
+    <h1>Organisations</h1>
+    <p>Approve a request to create the organisation and make the requester its first admin.</p>
+</header>
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(Model == "waiting" ? "active" : "")" asp-action="Organizations"><i class="bi bi-inbox"></i> Waiting</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model == "all" ? "active" : "")" asp-action="AllOrganizations"><i class="bi bi-buildings"></i> All organisations</a>
+    </li>
+</ul>

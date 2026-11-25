@@ -43,17 +43,20 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
         IdentityResult result = await users.CreateAsync(user, model.Password);
         if (!result.Succeeded)
         {
-            foreach (IdentityError error in result.Errors)
+            // The user name is the email, so both duplicate errors mean the same thing: report it once, plainly,
+            // with a way to sign in. (This does tell people the email has an account; hiding that would need
+            // confirmation emails, which the app doesn't send yet. A deliberate choice, see the QA report, F8.)
+            if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
             {
-                // The user name is the email, so both duplicate errors are about the email field (and say the same).
-                if (error.Code == "DuplicateUserName")
-                {
-                    continue;
-                }
+                ModelState.AddModelError(nameof(model.Email), "There's already an account with this email.");
+                ViewData["EmailTaken"] = true;
+            }
 
+            foreach (IdentityError error in result.Errors.Where(e => e.Code is not ("DuplicateEmail" or "DuplicateUserName")))
+            {
                 string field = error.Code switch
                 {
-                    "DuplicateEmail" or "InvalidEmail" => nameof(model.Email),
+                    "InvalidEmail" => nameof(model.Email),
                     _ when error.Code.StartsWith("Password") => nameof(model.Password),
                     _ => string.Empty,
                 };
@@ -68,7 +71,7 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
     }
 
     [HttpGet("login")]
-    public IActionResult Login(string? returnUrl = null)
+    public IActionResult Login(string? returnUrl = null, string? email = null)
     {
         if (User.Identity?.IsAuthenticated == true)
         {
@@ -76,7 +79,8 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
         }
 
         ViewData["ReturnUrl"] = returnUrl;
-        return View(new LoginViewModel());
+        // Pre-filled when arriving from "Sign in instead" on the registration form.
+        return View(new LoginViewModel { Email = email ?? "" });
     }
 
     [HttpPost("login")]

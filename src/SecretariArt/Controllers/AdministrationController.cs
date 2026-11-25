@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SecretariArt.Authorization;
+using SecretariArt.Extensions;
 using SecretariArt.Models;
 using SecretariArt.Services;
 using SecretariArt.ViewModels;
@@ -43,6 +44,8 @@ public class AdministrationController(
             Organization = organization,
             Pending = all.Where(m => m.Status == MembershipStatus.Pending).OrderBy(m => m.RequestedAt).ToList(),
             Active = all.Where(m => m.Status == MembershipStatus.Active).ToList(),
+            Rejected = all.Where(m => m.Status == MembershipStatus.Rejected)
+                .OrderByDescending(m => m.DecidedAt).Take(MembersViewModel.RejectedShown).ToList(),
             InviteLink = Url.Action("JoinWithCode", "Organizations", new { code = organization.InviteCode },
                 Request.Scheme)!,
         });
@@ -50,11 +53,34 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/members/{membershipId:int}/approve")]
-    public Task<IActionResult> Approve(int organizationId, int membershipId) => Decide(organizationId, membershipId, approve: true);
+    public async Task<IActionResult> Approve(int organizationId, int membershipId)
+    {
+        this.Report(await memberships.ApproveAsync(organizationId, membershipId));
+        return RedirectToAction(nameof(Members), new { organizationId });
+    }
+
+    // Rejecting has its own page: the admin must give a reason, which the person then sees on their Home page.
+    [Authorize(Policy = Policies.OrganizationAdmin)]
+    [HttpGet("{organizationId:int}/members/{membershipId:int}/reject")]
+    public async Task<IActionResult> Reject(int organizationId, int membershipId)
+    {
+        Membership? request = await memberships.FindPendingAsync(organizationId, membershipId);
+        return request == null ? RequestGone(organizationId) : View("Reject", Describe(request, new RejectViewModel()));
+    }
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/members/{membershipId:int}/reject")]
-    public Task<IActionResult> Reject(int organizationId, int membershipId) => Decide(organizationId, membershipId, approve: false);
+    public async Task<IActionResult> Reject(int organizationId, int membershipId, RejectViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            Membership? request = await memberships.FindPendingAsync(organizationId, membershipId);
+            return request == null ? RequestGone(organizationId) : View("Reject", Describe(request, model));
+        }
+
+        this.Report(await memberships.RejectAsync(organizationId, membershipId, model.Reason));
+        return RedirectToAction(nameof(Members), new { organizationId });
+    }
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/invite-code")]
@@ -65,10 +91,19 @@ public class AdministrationController(
         return RedirectToAction(nameof(Members), new { organizationId });
     }
 
-    private async Task<IActionResult> Decide(int organizationId, int membershipId, bool approve)
+    private RejectViewModel Describe(Membership request, RejectViewModel model)
     {
-        ServiceResult result = await memberships.DecideAsync(organizationId, membershipId, approve);
-        TempData["Message"] = result.Succeeded ? (approve ? "Request approved." : "Request rejected.") : result.Error;
+        string role = request.Role.ToString().ToLowerInvariant();
+        model.Heading = $"Reject {request.User!.FullName}'s request";
+        model.Details = $"{request.User.FullName} ({request.User.Email}) asked to join as a {role}. " +
+                        $"They'll see your reason and can ask again after {RejectionReasons.RejoinWait.TotalMinutes:0} minutes.";
+        model.CancelUrl = Url.Action(nameof(Members), new { organizationId = request.OrganizationId })!;
+        return model;
+    }
+
+    private IActionResult RequestGone(int organizationId)
+    {
+        this.Report(ServiceResult.Fail("We couldn't find that request, or it has already been handled."));
         return RedirectToAction(nameof(Members), new { organizationId });
     }
 }

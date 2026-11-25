@@ -1,7 +1,15 @@
+@* "Message" confirms something that happened; "Problem" explains why nothing did, so it must not look like success. *@
 @if (TempData["Message"] is string message)
 {
     <div class="alert alert-success alert-dismissible fade show" role="status">
         <i class="bi bi-check-circle me-2"></i>@message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["Problem"] is string problem)
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>@problem
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }

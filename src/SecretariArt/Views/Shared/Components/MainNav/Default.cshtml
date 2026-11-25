@@ -6,11 +6,13 @@
 }
 <ul class="navbar-nav ms-auto">
     <li class="nav-item"><a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-house"></i> Home</a></li>
-    @if (Model.Roles.HasAnyRole)
+    @* Schedule and Payments are personal (a timetable, payment deadlines): an admin-only account has neither yet;
+       its schedule and payment tools will live under Administration. *@
+    @if (Model.Roles.IsTeacher || Model.Roles.IsStudent)
     {
         <li class="nav-item"><a class="@Active("Sections", "Schedule")" asp-controller="Sections" asp-action="Schedule"><i class="bi bi-calendar3"></i> Schedule</a></li>
     }
-    @if (Model.Roles.IsStudent || Model.Roles.IsAdmin)
+    @if (Model.Roles.IsStudent)
     {
         <li class="nav-item"><a class="@Active("Sections", "Payments")" asp-controller="Sections" asp-action="Payments"><i class="bi bi-wallet2"></i> Payments</a></li>
     }

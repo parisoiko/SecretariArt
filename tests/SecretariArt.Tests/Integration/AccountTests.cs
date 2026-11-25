@@ -30,7 +30,7 @@ public class AccountTests(SecretariArtFactory factory)
 
     [Theory]
     [InlineData("PhoneNumber", "abc", "Enter a phone number")]
-    [InlineData("Email", "not-an-email", "The Email field is not a valid e-mail address.")]
+    [InlineData("Email", "not-an-email", "Enter a valid email address")]
     [InlineData("ConfirmPassword", "Different!2026", "The passwords don&#x27;t match.")]
     [InlineData("Password", "short", "minimum length of 8")]
     [InlineData("FirstName", "", "The First name field is required.")]
@@ -57,7 +57,10 @@ public class AccountTests(SecretariArtFactory factory)
             ["PhoneNumber"] = "+30 690 000 0000", ["Password"] = DbInitializer.DemoPassword, ["ConfirmPassword"] = DbInitializer.DemoPassword,
         });
 
-        Assert.Contains("is already taken", await response.Content.ReadAsStringAsync());
+        string page = await response.Content.ReadAsStringAsync();
+        Assert.Contains("There&#x27;s already an account with this email.", page);
+        Assert.Contains("Sign in instead", page);
+        Assert.Contains("/account/login?email=eleni@demo.secretariart.app", page);
     }
 
     [Fact]

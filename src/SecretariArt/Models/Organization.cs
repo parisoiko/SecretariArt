@@ -20,6 +20,9 @@ public class Organization
     public DateTime RequestedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
 
+    // Shown to the requester, so a rejected request isn't a dead end.
+    public string? RejectionReason { get; set; }
+
     public List<Membership> Memberships { get; set; } = [];
 }
 

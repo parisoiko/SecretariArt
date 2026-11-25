@@ -1,12 +1,9 @@
 @model List<Organization>
 @{
-    ViewData["Title"] = "Organisation requests";
+    ViewData["Title"] = "Organisations waiting";
 }
 
-<header class="page-header">
-    <h1>Organisation requests</h1>
-    <p>Approve a request to create the organisation and make the requester its first admin.</p>
-</header>
+<partial name="_Tabs" model="@("waiting")" />
 
 @if (Model.Count == 0)
 {
@@ -18,7 +15,7 @@
 else
 {
     <div class="table-responsive table-card">
-        <table class="table align-middle mb-0">
+        <table class="table align-middle mb-0 table-stack">
             <thead>
                 <tr><th>Organisation</th><th>Type</th><th>Requested by</th><th>Contact</th><th>Sent</th><th></th></tr>
             </thead>
@@ -26,18 +23,16 @@ else
                 @foreach (var organization in Model)
                 {
                     <tr>
-                        <td><strong>@organization.Name</strong><div class="text-muted small">@organization.City</div></td>
-                        <td>@organization.Type.Display()</td>
-                        <td>@organization.RequestedBy!.FullName<div class="text-muted small">@organization.RequestedBy.Email</div></td>
-                        <td>@organization.ContactEmail<div class="text-muted small">@organization.ContactPhone</div></td>
-                        <td class="text-nowrap">@organization.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
-                        <td class="text-end text-nowrap">
+                        <td data-label="Organisation"><strong>@organization.Name</strong><div class="text-muted small">@organization.City</div></td>
+                        <td data-label="Type">@organization.Type.Display()</td>
+                        <td data-label="Requested by">@organization.RequestedBy!.FullName<div class="text-muted small">@organization.RequestedBy.Email</div></td>
+                        <td data-label="Contact">@organization.ContactEmail<div class="text-muted small">@organization.ContactPhone</div></td>
+                        <td data-label="Sent" class="text-nowrap">@organization.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                        <td class="text-end text-nowrap table-actions">
                             <form asp-action="Approve" asp-route-id="@organization.Id" method="post" class="d-inline">
                                 <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Approve</button>
                             </form>
-                            <form asp-action="Reject" asp-route-id="@organization.Id" method="post" class="d-inline">
-                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> Reject</button>
-                            </form>
+                            <a class="btn btn-sm btn-outline-danger" asp-action="Reject" asp-route-id="@organization.Id"><i class="bi bi-x-lg"></i> Reject</a>
                         </td>
                     </tr>
                 }

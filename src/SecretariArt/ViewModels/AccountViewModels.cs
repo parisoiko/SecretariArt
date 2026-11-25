@@ -2,6 +2,12 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SecretariArt.ViewModels;
 
+// Validation wording shared by several forms. The framework's default for [EmailAddress] says "e-mail".
+public static class Messages
+{
+    public const string InvalidEmail = "Enter a valid email address, e.g. name@example.com.";
+}
+
 public class RegisterViewModel
 {
     // [Required] is explicit everywhere: the implicit "non-nullable means required" rule is skipped
@@ -12,7 +18,7 @@ public class RegisterViewModel
     [Required, StringLength(100), Display(Name = "Last name")]
     public string LastName { get; set; } = "";
 
-    [Required, EmailAddress, StringLength(256)]
+    [Required, EmailAddress(ErrorMessage = Messages.InvalidEmail), StringLength(256)]
     public string Email { get; set; } = "";
 
     [Required, Display(Name = "Phone number")]
@@ -30,7 +36,7 @@ public class RegisterViewModel
 
 public class LoginViewModel
 {
-    [Required, EmailAddress]
+    [Required, EmailAddress(ErrorMessage = Messages.InvalidEmail)]
     public string Email { get; set; } = "";
 
     [Required, DataType(DataType.Password)]

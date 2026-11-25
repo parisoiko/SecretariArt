@@ -17,6 +17,11 @@ public class Membership
 
     public DateTime RequestedAt { get; set; }
     public DateTime? DecidedAt { get; set; }
+
+    // Kept when the person asks again (the same row is re-opened), so the admin sees they were turned away before
+    // and why, and so the waiting time before asking again can be enforced.
+    public DateTime? LastRejectedAt { get; set; }
+    public string? RejectionReason { get; set; }
 }
 
 public enum MembershipRole

@@ -27,6 +27,7 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
             organization.Property(o => o.ContactEmail).HasMaxLength(256);
             organization.Property(o => o.ContactPhone).HasMaxLength(30);
             organization.Property(o => o.InviteCode).HasMaxLength(12);
+            organization.Property(o => o.RejectionReason).HasMaxLength(RejectionReasons.MaxLength);
 
             // Enums as text: readable in the database and safe if values are reordered later.
             organization.Property(o => o.Type).HasConversion<string>().HasMaxLength(30);
@@ -44,6 +45,7 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         {
             membership.Property(m => m.Role).HasConversion<string>().HasMaxLength(20);
             membership.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
+            membership.Property(m => m.RejectionReason).HasMaxLength(RejectionReasons.MaxLength);
 
             // One membership per person, organisation and role (a rejected request can be re-opened, not duplicated).
             membership.HasIndex(m => new { m.UserId, m.OrganizationId, m.Role }).IsUnique();

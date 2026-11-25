@@ -13,14 +13,15 @@ public sealed class ServiceTests : IDisposable
     private readonly SecretariArtDbContext _db;
     private readonly OrganizationService _organizations;
     private readonly MembershipService _memberships;
+    private readonly MovableClock _clock = new();
 
     public ServiceTests()
     {
         _connection.Open();
         _db = new SecretariArtDbContext(new DbContextOptionsBuilder<SecretariArtDbContext>().UseSqlite(_connection).Options);
         _db.Database.EnsureCreated();
-        _organizations = new OrganizationService(_db, new InviteCodeGenerator(), TimeProvider.System);
-        _memberships = new MembershipService(_db, TimeProvider.System);
+        _organizations = new OrganizationService(_db, new InviteCodeGenerator(), _clock);
+        _memberships = new MembershipService(_db, _clock);
     }
 
     private ApplicationUser AddUser(string name)
@@ -79,7 +80,7 @@ public sealed class ServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Joining_IsPendingUntilDecided_AndCanBeAskedAgainAfterRejection()
+    public async Task Joining_IsPendingUntilDecided_AndCanBeAskedAgainTenMinutesAfterRejection()
     {
         Organization organization = await ActiveOrganizationAsync("Corfu Dance", AddUser("corfu"));
         ApplicationUser student = AddUser("student");
@@ -88,11 +89,51 @@ public sealed class ServiceTests : IDisposable
         Assert.False((await _memberships.JoinAsync(student.Id, organization.InviteCode!, MembershipRole.Student)).Succeeded);
 
         Membership membership = _db.Memberships.Single(m => m.UserId == student.Id);
-        await _memberships.DecideAsync(organization.Id, membership.Id, approve: false);
+        await _memberships.RejectAsync(organization.Id, membership.Id, "Classes are full.");
         Assert.Equal(MembershipStatus.Rejected, membership.Status);
+        Assert.Equal("Classes are full.", membership.RejectionReason);
 
+        _clock.Advance(TimeSpan.FromMinutes(9));
+        ServiceResult tooSoon = await _memberships.JoinAsync(student.Id, organization.InviteCode!, MembershipRole.Student);
+        Assert.False(tooSoon.Succeeded);
+        Assert.Contains("You can ask again in 1 minute.", tooSoon.Error);
+
+        _clock.Advance(TimeSpan.FromMinutes(1));
         Assert.True((await _memberships.JoinAsync(student.Id, organization.InviteCode!, MembershipRole.Student)).Succeeded);
-        Assert.Equal(MembershipStatus.Pending, _db.Memberships.Single(m => m.UserId == student.Id).Status);
+
+        // Asking again keeps the earlier rejection on record, so the admin sees it.
+        Membership reopened = _db.Memberships.Single(m => m.UserId == student.Id);
+        Assert.Equal(MembershipStatus.Pending, reopened.Status);
+        Assert.NotNull(reopened.LastRejectedAt);
+        Assert.Equal("Classes are full.", reopened.RejectionReason);
+    }
+
+    [Fact]
+    public async Task Rejecting_NeedsAReason()
+    {
+        Organization organization = await ActiveOrganizationAsync("Reason Studio", AddUser("reasonowner"));
+        ApplicationUser student = AddUser("reasonless");
+        await _memberships.JoinAsync(student.Id, organization.InviteCode!, MembershipRole.Student);
+        int requestId = _db.Memberships.Single(m => m.UserId == student.Id).Id;
+
+        Assert.False((await _memberships.RejectAsync(organization.Id, requestId, "   ")).Succeeded);
+        Assert.Equal(MembershipStatus.Pending, _db.Memberships.Single(m => m.Id == requestId).Status);
+
+        await _organizations.RequestAsync(AddUser("hopeful").Id, Request("Hopeful Studio"));
+        int pendingOrganization = _db.Organizations.Single(o => o.Name == "Hopeful Studio").Id;
+        Assert.False((await _organizations.RejectAsync(pendingOrganization, "")).Succeeded);
+        Assert.True((await _organizations.RejectAsync(pendingOrganization, " Not an arts school. ")).Succeeded);
+        Assert.Equal("Not an arts school.", _db.Organizations.Single(o => o.Id == pendingOrganization).RejectionReason);
+    }
+
+    [Fact]
+    public async Task AllOrganisations_CanBeListedByStatus()
+    {
+        await ActiveOrganizationAsync("Listed Active", AddUser("listedowner"));
+        await _organizations.RequestAsync(AddUser("listedwaiting").Id, Request("Listed Waiting"));
+
+        Assert.Equal(2, (await _organizations.GetAllAsync(null)).Count);
+        Assert.Equal("Listed Waiting", Assert.Single(await _organizations.GetAllAsync(OrganizationStatus.Pending)).Name);
     }
 
     [Fact]
@@ -127,10 +168,44 @@ public sealed class ServiceTests : IDisposable
         await _memberships.JoinAsync(student.Id, theirs.InviteCode!, MembershipRole.Student);
         int requestId = _db.Memberships.Single(m => m.UserId == student.Id).Id;
 
-        ServiceResult result = await _memberships.DecideAsync(mine.Id, requestId, approve: true);
+        ServiceResult result = await _memberships.ApproveAsync(mine.Id, requestId);
 
         Assert.False(result.Succeeded);
         Assert.Equal(MembershipStatus.Pending, _db.Memberships.Single(m => m.Id == requestId).Status);
+    }
+
+    [Fact]
+    public async Task ARejection_CanBeUndoneByApproving_ButNotRejectedTwice()
+    {
+        Organization organization = await ActiveOrganizationAsync("Undo Studio", AddUser("undoowner"));
+        ApplicationUser teacher = AddUser("Kostas");
+        await _memberships.JoinAsync(teacher.Id, organization.InviteCode!, MembershipRole.Teacher);
+        int requestId = _db.Memberships.Single(m => m.UserId == teacher.Id).Id;
+
+        ServiceResult rejected = await _memberships.RejectAsync(organization.Id, requestId, "Classes are full.");
+        Assert.Contains("Kostas", rejected.Message);
+        Assert.Contains("teacher", rejected.Message);
+        Assert.False((await _memberships.RejectAsync(organization.Id, requestId, "Classes are full.")).Succeeded);
+
+        ServiceResult approved = await _memberships.ApproveAsync(organization.Id, requestId);
+        Assert.True(approved.Succeeded);
+        Assert.Contains("Kostas", approved.Message);
+        Assert.Equal(MembershipStatus.Active, _db.Memberships.Single(m => m.Id == requestId).Status);
+
+        // An active member isn't a request any more: neither decision applies.
+        Assert.Equal("This request has already been handled.",
+            (await _memberships.RejectAsync(organization.Id, requestId, "Classes are full.")).Error);
+    }
+
+    [Fact]
+    public async Task DecidingOnARequestThatDoesNotExist_SaysSo()
+    {
+        Organization organization = await ActiveOrganizationAsync("Missing Studio", AddUser("missingowner"));
+
+        Assert.Equal("We couldn't find that request.",
+            (await _memberships.ApproveAsync(organization.Id, 999_999)).Error);
+        Assert.Equal("We couldn't find that request.", (await _organizations.ApproveAsync(999_999)).Error);
+        Assert.Equal("This request has already been handled.", (await _organizations.ApproveAsync(organization.Id)).Error);
     }
 
     [Fact]
@@ -148,4 +223,14 @@ public sealed class ServiceTests : IDisposable
         _db.Dispose();
         _connection.Dispose();
     }
+}
+
+// A clock the tests can move forward, for rules that depend on time passing (e.g. the wait before asking again).
+public sealed class MovableClock : TimeProvider
+{
+    private DateTimeOffset _now = new(2026, 9, 1, 9, 0, 0, TimeSpan.Zero);
+
+    public override DateTimeOffset GetUtcNow() => _now;
+
+    public void Advance(TimeSpan by) => _now += by;
 }

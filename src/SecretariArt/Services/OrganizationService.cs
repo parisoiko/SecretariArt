@@ -11,8 +11,10 @@ public interface IOrganizationService
     Task<ServiceResult> RequestAsync(string userId, OrganizationRequest request);
     Task<List<Organization>> GetPendingAsync();
     Task<ServiceResult> ApproveAsync(int organizationId);
-    Task<ServiceResult> RejectAsync(int organizationId);
+    Task<ServiceResult> RejectAsync(int organizationId, string reason);
+    Task<List<Organization>> GetAllAsync(OrganizationStatus? status);
     Task<Organization?> FindAsync(int organizationId);
+    Task<Organization?> FindPendingRequestAsync(int organizationId);
     Task<string> RegenerateInviteCodeAsync(int organizationId);
 }
 
@@ -58,15 +60,23 @@ public class OrganizationService(
             .OrderBy(o => o.RequestedAt)
             .ToListAsync();
 
+    // Every organisation and past decision, for the platform admin's overview. Newest decisions first.
+    public Task<List<Organization>> GetAllAsync(OrganizationStatus? status) =>
+        db.Organizations.AsNoTracking()
+            .Where(o => status == null || o.Status == status)
+            .Include(o => o.RequestedBy)
+            .OrderByDescending(o => o.ReviewedAt ?? o.RequestedAt)
+            .ToListAsync();
+
     public async Task<ServiceResult> ApproveAsync(int organizationId)
     {
         Organization? organization = await db.Organizations.FindAsync(organizationId);
-        if (organization is not { Status: OrganizationStatus.Pending })
+        if (CannotDecide(organization) is { } refusal)
         {
-            return ServiceResult.Fail("This request has already been handled.");
+            return refusal;
         }
 
-        organization.Status = OrganizationStatus.Active;
+        organization!.Status = OrganizationStatus.Active;
         organization.ReviewedAt = Now;
         organization.InviteCode = await NewUniqueCodeAsync();
 
@@ -85,19 +95,38 @@ public class OrganizationService(
         return ServiceResult.Ok();
     }
 
-    public async Task<ServiceResult> RejectAsync(int organizationId)
+    public async Task<ServiceResult> RejectAsync(int organizationId, string reason)
     {
         Organization? organization = await db.Organizations.FindAsync(organizationId);
-        if (organization is not { Status: OrganizationStatus.Pending })
+        if (CannotDecide(organization) is { } refusal)
         {
-            return ServiceResult.Fail("This request has already been handled.");
+            return refusal;
         }
 
-        organization.Status = OrganizationStatus.Rejected;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return ServiceResult.Fail("Give a reason, so the requester knows why.");
+        }
+
+        organization!.Status = OrganizationStatus.Rejected;
         organization.ReviewedAt = Now;
+        organization.RejectionReason = reason.Trim();
         await db.SaveChangesAsync();
-        return ServiceResult.Ok();
+        return ServiceResult.Ok($"The request for {organization.Name} was rejected.");
     }
+
+    private static ServiceResult? CannotDecide(Organization? organization) => organization switch
+    {
+        null => ServiceResult.Fail("We couldn't find that request."),
+        { Status: not OrganizationStatus.Pending } => ServiceResult.Fail("This request has already been handled."),
+        _ => null,
+    };
+
+    // A request still waiting for a decision, with who sent it (for the reject page).
+    public Task<Organization?> FindPendingRequestAsync(int organizationId) =>
+        db.Organizations.AsNoTracking()
+            .Include(o => o.RequestedBy)
+            .FirstOrDefaultAsync(o => o.Id == organizationId && o.Status == OrganizationStatus.Pending);
 
     public Task<Organization?> FindAsync(int organizationId) =>
         db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == organizationId);

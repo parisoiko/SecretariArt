@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SecretariArt.Authorization;
 using SecretariArt.Data;
 using SecretariArt.Models;
 using SecretariArt.Services;
@@ -33,8 +34,20 @@ public class HomeController(ICurrentUserMemberships currentMemberships, Secretar
             .OrderByDescending(o => o.RequestedAt)
             .ToListAsync();
 
+        // Once someone asks again under the same name, the older rejection only confuses: keep the newest per name.
+        requests = requests
+            .GroupBy(o => o.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        // The platform admin's work starts here, not with joining a school.
+        int? platformRequestsWaiting = User.IsInRole(Policies.PlatformAdminRole)
+            ? await db.Organizations.CountAsync(o => o.Status == OrganizationStatus.Pending)
+            : null;
+
         return View(new HomeViewModel
         {
+            PlatformRequestsWaiting = platformRequestsWaiting,
             FirstName = User.FindFirstValue(ClaimTypes.GivenName) ?? "",
             Memberships = memberships,
             OrganizationRequests = requests,
