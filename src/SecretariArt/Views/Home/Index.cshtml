@@ -1,0 +1,81 @@
+@model HomeViewModel
+@{
+    ViewData["Title"] = "Home";
+    var active = Model.Memberships
+        .Where(m => m.Status == MembershipStatus.Active && m.Organization!.Status == OrganizationStatus.Active)
+        .GroupBy(m => m.Organization!)
+        .ToList();
+    var waiting = Model.Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
+}
+
+<header class="page-header">
+    <h1>Hello, @Model.FirstName</h1>
+    <p>@(active.Count == 0 ? "Let's get you connected to your school." : "Here are your organisations.")</p>
+</header>
+
+@if (active.Count > 0)
+{
+    <div class="org-grid mb-4">
+        @foreach (var organization in active)
+        {
+            bool isAdmin = organization.Any(m => m.Role == MembershipRole.Admin);
+            Model.PendingJoinRequests.TryGetValue(organization.Key.Id, out int pendingRequests);
+            <article class="org-card">
+                <div class="org-type">@organization.Key.Type.Display() · @organization.Key.City</div>
+                <h2>@organization.Key.Name</h2>
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    @foreach (var membership in organization.OrderBy(m => m.Role))
+                    {
+                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                    }
+                </div>
+                @if (isAdmin)
+                {
+                    <a class="btn btn-sm btn-outline-primary" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Key.Id">
+                        <i class="bi bi-people"></i> Members
+                        @if (pendingRequests > 0)
+                        {
+                            <span class="badge text-bg-warning ms-1">@pendingRequests waiting</span>
+                        }
+                    </a>
+                }
+            </article>
+        }
+    </div>
+}
+
+@if (waiting.Count > 0 || Model.OrganizationRequests.Count > 0)
+{
+    <section class="mb-4">
+        <h2 class="section-title">Requests</h2>
+        <ul class="list-group">
+            @foreach (var membership in waiting)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>Join <strong>@membership.Organization!.Name</strong> as a @membership.Role.ToString().ToLowerInvariant()</span>
+                    <span class="status-pill status-@membership.Status.ToString().ToLowerInvariant()">@(membership.Status == MembershipStatus.Pending ? "Waiting for approval" : "Not approved")</span>
+                </li>
+            }
+            @foreach (var request in Model.OrganizationRequests)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>New organisation <strong>@request.Name</strong></span>
+                    <span class="status-pill status-@request.Status.ToString().ToLowerInvariant()">@(request.Status == OrganizationStatus.Pending ? "Under review" : "Not approved")</span>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section class="action-grid">
+    <a class="action-card" asp-controller="Organizations" asp-action="Join">
+        <i class="bi bi-person-plus"></i>
+        <h3>Join an organisation</h3>
+        <p>Have an invite code from your school or studio? Join as a student or a teacher.</p>
+    </a>
+    <a class="action-card" asp-controller="Organizations" asp-action="RequestOrganization">
+        <i class="bi bi-building-add"></i>
+        <h3>Register your organisation</h3>
+        <p>Run a school, studio or art space? Ask for it to be set up and you'll become its admin.</p>
+    </a>
+</section>

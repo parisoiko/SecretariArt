@@ -1,0 +1,6 @@
+{
+    "files.autoSave": "afterDelay",
+    "[csharp]": {
+        "editor.defaultFormatter": "ms-dotnettools.csharp"
+    }
+}

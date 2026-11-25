@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <partial name="_Head" />
+</head>
+<body class="auth">
+    <div class="auth-panel">
+        <div class="auth-intro">
+            <a class="auth-brand" asp-controller="Home" asp-action="Index"><span class="brand-mark">S</span>SecretariArt</a>
+            <h1>The front office for schools of the arts.</h1>
+            <p>Schedules, classrooms, teachers' availability and students' payments, in one place, for drama schools,
+               conservatoires, dance studios and ateliers.</p>
+        </div>
+        <div class="auth-card">
+            @RenderBody()
+        </div>
+    </div>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

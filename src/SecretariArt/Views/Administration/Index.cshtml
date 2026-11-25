@@ -1,0 +1,19 @@
+@model List<Organization>
+@{
+    ViewData["Title"] = "Administration";
+}
+
+<header class="page-header">
+    <h1>Administration</h1>
+    <p>Choose the organisation to manage.</p>
+</header>
+
+<div class="org-grid">
+    @foreach (var organization in Model)
+    {
+        <a class="org-card org-card-link" asp-action="Members" asp-route-organizationId="@organization.Id">
+            <div class="org-type">@organization.Type.Display() · @organization.City</div>
+            <h2>@organization.Name</h2>
+        </a>
+    }
+</div>

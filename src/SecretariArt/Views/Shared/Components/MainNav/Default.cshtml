@@ -1,0 +1,25 @@
+@model SecretariArt.ViewComponents.MainNavModel
+@{
+    string Active(string controller, string? action = null) =>
+        Model.CurrentController == controller && (action == null || ViewContext.RouteData.Values["action"]?.ToString() == action)
+            ? "nav-link active" : "nav-link";
+}
+<ul class="navbar-nav ms-auto">
+    <li class="nav-item"><a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-house"></i> Home</a></li>
+    @if (Model.Roles.HasAnyRole)
+    {
+        <li class="nav-item"><a class="@Active("Sections", "Schedule")" asp-controller="Sections" asp-action="Schedule"><i class="bi bi-calendar3"></i> Schedule</a></li>
+    }
+    @if (Model.Roles.IsStudent || Model.Roles.IsAdmin)
+    {
+        <li class="nav-item"><a class="@Active("Sections", "Payments")" asp-controller="Sections" asp-action="Payments"><i class="bi bi-wallet2"></i> Payments</a></li>
+    }
+    @if (Model.Roles.IsAdmin)
+    {
+        <li class="nav-item"><a class="@Active("Administration")" asp-controller="Administration" asp-action="Index"><i class="bi bi-sliders"></i> Administration</a></li>
+    }
+    @if (Model.IsPlatformAdmin)
+    {
+        <li class="nav-item"><a class="@Active("Platform")" asp-controller="Platform" asp-action="Organizations"><i class="bi bi-shield-check"></i> Platform</a></li>
+    }
+</ul>

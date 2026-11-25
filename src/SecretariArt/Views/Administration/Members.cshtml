@@ -1,0 +1,86 @@
+@model MembersViewModel
+@{
+    ViewData["Title"] = $"Members · {Model.Organization.Name}";
+}
+
+<header class="page-header">
+    <div class="org-type">Administration</div>
+    <h1>@Model.Organization.Name</h1>
+</header>
+
+<ul class="nav nav-tabs admin-tabs mb-4">
+    <li class="nav-item"><a class="nav-link active" aria-current="page" href="#"><i class="bi bi-people"></i> Members</a></li>
+    <li class="nav-item"><span class="nav-link disabled" title="Coming soon"><i class="bi bi-list-check"></i> Rules</span></li>
+    <li class="nav-item"><span class="nav-link disabled" title="Coming soon"><i class="bi bi-door-open"></i> Classrooms</span></li>
+    <li class="nav-item"><span class="nav-link disabled" title="Coming soon"><i class="bi bi-journal-bookmark"></i> Courses &amp; enrolment</span></li>
+</ul>
+
+<section class="invite-panel mb-4">
+    <div>
+        <h2 class="section-title mb-1">Invite people</h2>
+        <p class="text-muted mb-2">Share the code or the link. People who use it ask to join, and appear below for you to approve.</p>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="invite-code">@Model.Organization.InviteCode</span>
+            <input class="form-control invite-link" value="@Model.InviteLink" readonly aria-label="Invite link" onclick="this.select()" />
+        </div>
+    </div>
+    <form asp-action="RegenerateInviteCode" asp-route-organizationId="@Model.Organization.Id" method="post"
+          onsubmit="return confirm('Make a new code? The current code and link will stop working.');">
+        <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-repeat"></i> New code</button>
+    </form>
+</section>
+
+<section class="mb-4">
+    <h2 class="section-title">Waiting for approval <span class="badge text-bg-warning">@Model.Pending.Count</span></h2>
+    @if (Model.Pending.Count == 0)
+    {
+        <p class="text-muted">No one is waiting.</p>
+    }
+    else
+    {
+        <div class="table-responsive table-card">
+            <table class="table align-middle mb-0">
+                <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Asked</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var membership in Model.Pending)
+                    {
+                        <tr>
+                            <td><strong>@membership.User!.FullName</strong></td>
+                            <td><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
+                            <td>@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
+                            <td class="text-nowrap">@membership.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
+                            <td class="text-end text-nowrap">
+                                <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
+                                    <button class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> Approve</button>
+                                </form>
+                                <form asp-action="Reject" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
+                                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> Reject</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section>
+    <h2 class="section-title">Members <span class="badge text-bg-secondary">@Model.Active.Count</span></h2>
+    <div class="table-responsive table-card">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead>
+            <tbody>
+                @foreach (var membership in Model.Active.OrderBy(m => m.Role))
+                {
+                    <tr>
+                        <td>@membership.User!.FullName</td>
+                        <td><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
+                        <td>@membership.User.Email</td>
+                        <td>@membership.User.PhoneNumber</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

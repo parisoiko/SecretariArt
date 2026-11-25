@@ -1,0 +1,50 @@
+@model JoinViewModel
+@{
+    ViewData["Title"] = "Join an organisation";
+}
+
+<div class="narrow">
+    <header class="page-header">
+        @if (Model.OrganizationName != null)
+        {
+            <h1>Join @Model.OrganizationName</h1>
+            <p>Choose your role. The organisation's admins will confirm your membership.</p>
+        }
+        else
+        {
+            <h1>Join an organisation</h1>
+            <p>Enter the invite code your school or studio gave you. Its admins will confirm your membership.</p>
+        }
+    </header>
+
+    <form asp-action="Join" method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <input type="hidden" asp-for="OrganizationName" />
+
+        <div class="mb-3">
+            <label asp-for="InviteCode" class="form-label"></label>
+            <input asp-for="InviteCode" class="form-control code-input" placeholder="e.g. ATHENS26" autocomplete="off" />
+            <span asp-validation-for="InviteCode" class="invalid-feedback d-block"></span>
+        </div>
+
+        <fieldset class="mb-4">
+            <legend class="form-label fs-6">@Html.DisplayNameFor(m => m.Role)</legend>
+            <div class="role-options">
+                <label class="role-option">
+                    <input type="radio" asp-for="Role" value="@MembershipRole.Student" />
+                    <span><i class="bi bi-mortarboard"></i> Student</span>
+                </label>
+                <label class="role-option">
+                    <input type="radio" asp-for="Role" value="@MembershipRole.Teacher" />
+                    <span><i class="bi bi-easel"></i> Teacher</span>
+                </label>
+            </div>
+            <span asp-validation-for="Role" class="invalid-feedback d-block"></span>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Send request</button>
+        <a class="btn btn-link" asp-controller="Home" asp-action="Index">Cancel</a>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

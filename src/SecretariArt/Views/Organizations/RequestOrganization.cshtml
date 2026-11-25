@@ -1,0 +1,54 @@
+@model OrganizationRequestViewModel
+@{
+    ViewData["Title"] = "Register your organisation";
+    var types = Enum.GetValues<OrganizationType>().Select(t => new SelectListItem(t.Display(), t.ToString()));
+}
+
+<div class="narrow">
+    <header class="page-header">
+        <h1>Register your organisation</h1>
+        <p>We review every request, usually within a working day. Once it's approved you'll be its first admin
+           and can invite your teachers and students.</p>
+    </header>
+
+    <form asp-action="RequestOrganization" method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" placeholder="e.g. Athens Drama School" autofocus />
+            <span asp-validation-for="Name" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+                <label asp-for="Type" class="form-label"></label>
+                <select asp-for="Type" asp-items="types" class="form-select">
+                    <option value="">Choose…</option>
+                </select>
+                <span asp-validation-for="Type" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-sm-6">
+                <label asp-for="City" class="form-label"></label>
+                <input asp-for="City" class="form-control" />
+                <span asp-validation-for="City" class="invalid-feedback d-block"></span>
+            </div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6">
+                <label asp-for="ContactEmail" class="form-label"></label>
+                <input asp-for="ContactEmail" class="form-control" />
+                <span asp-validation-for="ContactEmail" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-sm-6">
+                <label asp-for="ContactPhone" class="form-label"></label>
+                <input asp-for="ContactPhone" class="form-control" type="tel" />
+                <span asp-validation-for="ContactPhone" class="invalid-feedback d-block"></span>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Send request</button>
+        <a class="btn btn-link" asp-controller="Home" asp-action="Index">Cancel</a>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }
