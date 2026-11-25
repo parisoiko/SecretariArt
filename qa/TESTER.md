@@ -37,6 +37,57 @@ Read `CLAUDE.md` for the domain rules. They define what "correct" means here.
    5–15 members each, some pending and some rejected, plus a few organisation requests still waiting for the
    platform admin.
 
+### Milestone 2: administration (rounds 5–9)
+Each organisation admin now has six tabs: **Members · Rules · Classrooms · Courses · Bundles · Enrolments**.
+The Members page shows a **Getting started** checklist until every step is done. Work in the organisations you
+already have, as each one's own admin, and make the data fit the kind of school (no ballet barres in an atelier).
+
+5. **Rules.** For each active organisation, open Rules: it starts with suggested defaults that aren't saved yet.
+   Save realistic rules (teaching days, day start/end, start-time step, shortest/longest session, sessions per
+   week, changeover, optional teaching-hours limit and term dates). Probe:
+   - day ending before it starts; no days ticked;
+   - shortest longer than longest; lengths that aren't a multiple of the step;
+   - only one term date; a term ending before it starts.
+6. **Classrooms.** Add 3–6 rooms per organisation, with capacity, floor, features, step-free access and notes.
+   Edit one and delete one. Probe:
+   - a duplicate name (also in a different case);
+   - capacity 0, negative or huge;
+   - 100+ character names and Greek names;
+   - the same room name in two different organisations (this is allowed).
+7. **Courses and groups.** Add 4–8 courses per organisation, with length, sessions per week, the features the room
+   needs and the teachers who can teach it. Give most of them 1–3 groups (places + a teacher). Check:
+   - the **warnings**: no room with the needed features, no teacher, no groups, a group bigger than the largest
+     suitable room, and courses that no longer fit after you tighten the Rules (saving the rules names them);
+   - a course outside the rules is refused;
+   - a group teacher must be one of the course's teachers, and removing a teacher from the course leaves their
+     groups with no teacher (the message says so);
+   - places can't drop below the number already enrolled;
+   - deleting a group or a course says what goes with it.
+8. **Bundles.** Make 1–3 bundles per organisation (e.g. "Year 1", "Foundation"), with an empty bundle (refused),
+   a duplicate name, and an edit that adds and removes courses.
+9. **Enrolments.** Enrol most approved students. Use all three ways:
+   - **one course** from the student's page (choosing another group of a course they already take *moves* them);
+   - **a whole bundle**, with and without "Keep them in group…": check the message lists courses they already
+     take and courses with no free places;
+   - **several students at once** from a group on the course page ("Add students": full groups refuse, students
+     already taking the course are skipped).
+
+   Remove a few enrolments, from both the student page and the course page. Fill one group exactly to capacity
+   and try to add one more. Check the Enrolments search (name, email, Greek).
+
+**Milestone 2 probes** (on top of the general ones below):
+- An admin of A opens B's ids under A's own address: `/admin/{A}/classrooms/{roomOfB}/edit`,
+  `/admin/{A}/courses/{courseOfB}`, `/admin/{A}/enrolments/students/{studentOfB}`. Expected: "not found",
+  nothing changed.
+- A teacher, a student, a pending member and a signed-out visitor each open `/admin/{orgId}/rules`,
+  `/classrooms`, `/courses`, `/bundles` and `/enrolments`. Expected: access denied, or sign-in for the visitor.
+- Pending, rejected and teacher-only people must never be offered for enrolment.
+- After every save, the page you land on is the right tab of the right organisation (not an error page), with a
+  message naming what changed.
+- Delete confirmations name what will go. Cancelling one changes nothing.
+- At 390×844 the tab row scrolls sideways with the current tab in view. Tables stack into cards; chips and
+  buttons stay usable.
+
 ## Probes (in every round, wherever they apply)
 - **Access control:** a student or teacher opens `/admin/{orgId}/members`; an admin of A opens
   `/admin/{orgIdOfB}/members` and tries to approve someone there; a non-platform user opens
@@ -59,7 +110,22 @@ Read `CLAUDE.md` for the domain rules. They define what "correct" means here.
 - Report only what you actually saw. If you're unsure whether something is a bug, file it as a question.
 - End each run with a short summary: what you covered, what you didn't, and the counts in the ledger.
 
+## Ledger for milestone 2
+Add these sections to `qa/reports/ledger.md`:
+- **Rules** per organisation, as a one-line summary.
+- **Classrooms**: organisation, name, capacity, floor, features.
+- **Courses**: organisation, name, length × per week, needs, teachers, and each group with places, teacher and
+  enrolled count.
+- **Bundles**: organisation, name, courses.
+- **Enrolments**: per organisation, which students take what.
+
+Keep the counts at the end up to date.
+
+## Retesting
+Before starting new rounds, retest the open findings in the latest run report (N6–N9 from the milestone 1 run
+included) and mark each one fixed or still open.
+
 ## Future milestones (to extend as features land)
-Classrooms, courses, groups, bundles, enrolments, availability, schedules and payment books don't exist yet. When
-these pages appear, rounds for them will be added here. Until then, don't go looking for them. If you find a
-link to something unfinished, note it in the report.
+Availability, schedules, calendars and payment books don't exist yet. When these pages appear, rounds for them
+will be added here. Until then, don't go looking for them. If you find a link to something unfinished, note it in
+the report.

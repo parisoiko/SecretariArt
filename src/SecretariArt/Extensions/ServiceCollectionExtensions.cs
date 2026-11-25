@@ -57,12 +57,25 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IInviteCodeGenerator, InviteCodeGenerator>();
         services.AddScoped<IOrganizationService, OrganizationService>();
         services.AddScoped<IMembershipService, MembershipService>();
+        services.AddScoped<IRulesService, RulesService>();
+        services.AddScoped<IClassroomService, ClassroomService>();
+        services.AddScoped<ICourseService, CourseService>();
+        services.AddScoped<IEnrolmentService, EnrolmentService>();
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserMemberships, CurrentUserMemberships>();
 
         services.AddControllersWithViews(options =>
-            options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
+        {
+            options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+
+            // The framework's wording when a value can't be read at all ("The value '2.5' is not valid for
+            // Capacity (people)."). The numeric fields on our forms are whole numbers.
+            var messages = options.ModelBindingMessageProvider;
+            messages.SetAttemptedValueIsInvalidAccessor((_, field) => $"Enter a whole number for {field}.");
+            messages.SetValueMustBeANumberAccessor(field => $"Enter a number for {field}.");
+            messages.SetValueIsInvalidAccessor(_ => "Enter a valid value.");
+        });
 
         return services;
     }

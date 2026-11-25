@@ -18,7 +18,7 @@
                       placeholder="e.g. Our classes for this year are full; please ask again in September." autofocus></textarea>
             <span asp-validation-for="Reason" class="invalid-feedback d-block"></span>
         </div>
-        <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg"></i> Reject request</button>
+        <button type="submit" class="btn btn-danger"><i class="bi bi-x-lg" aria-hidden="true"></i> Reject request</button>
         <a class="btn btn-link" href="@Model.CancelUrl">Cancel</a>
     </form>
 </div>

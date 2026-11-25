@@ -230,6 +230,227 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Bundles");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.BundleCourse", b =>
+                {
+                    b.Property<int>("BundleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("BundleId", "CourseId");
+
+                    b.HasIndex("CourseId");
+
+                    b.ToTable("BundleCourses");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Classroom", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Features")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Floor")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("StepFreeAccess")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Classrooms");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Course", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequiredFeatures")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("SessionMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SessionsPerWeek")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Courses");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.CourseGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TeacherId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("TeacherId");
+
+                    b.HasIndex("CourseId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("CourseGroups");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.CourseTeacher", b =>
+                {
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TeacherId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("CourseId", "TeacherId");
+
+                    b.HasIndex("TeacherId");
+
+                    b.ToTable("CourseTeachers");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BundleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EnrolledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BundleId");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("StudentId", "CourseId")
+                        .IsUnique();
+
+                    b.ToTable("Enrolments");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Membership", b =>
                 {
                     b.Property<int>("Id")
@@ -344,6 +565,66 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("Organizations");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.OrganizationRules", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BreakBetweenSessionsMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("DayEnds")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly>("DayStarts")
+                        .HasColumnType("time");
+
+                    b.Property<int>("MaxSessionMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxSessionsPerWeek")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxTeachingHoursPerDay")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinSessionMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinSessionsPerWeek")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SlotMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TeachingDays")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("TermEnds")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("TermStarts")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("OrganizationRules");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -395,6 +676,129 @@ namespace SecretariArt.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.BundleCourse", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Bundle", "Bundle")
+                        .WithMany("Courses")
+                        .HasForeignKey("BundleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.Course", "Course")
+                        .WithMany("Bundles")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Bundle");
+
+                    b.Navigation("Course");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Classroom", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Course", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.CourseGroup", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Course", "Course")
+                        .WithMany("Groups")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.CourseTeacher", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Course", "Course")
+                        .WithMany("Teachers")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Bundle", "Bundle")
+                        .WithMany()
+                        .HasForeignKey("BundleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SecretariArt.Models.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.CourseGroup", "Group")
+                        .WithMany("Enrolments")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bundle");
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Membership", b =>
                 {
                     b.HasOne("SecretariArt.Models.Organization", "Organization")
@@ -425,9 +829,39 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("RequestedBy");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.OrganizationRules", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithOne()
+                        .HasForeignKey("SecretariArt.Models.OrganizationRules", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.ApplicationUser", b =>
                 {
                     b.Navigation("Memberships");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
+                {
+                    b.Navigation("Courses");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Course", b =>
+                {
+                    b.Navigation("Bundles");
+
+                    b.Navigation("Groups");
+
+                    b.Navigation("Teachers");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.CourseGroup", b =>
+                {
+                    b.Navigation("Enrolments");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Organization", b =>

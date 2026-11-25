@@ -1,0 +1,61 @@
+@model List<CourseOverview>
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Courses · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("courses")" />
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <p class="text-muted mb-0">What you teach. Each course runs in one or more groups; students are enrolled in a group.</p>
+    <a class="btn btn-primary" asp-action="Create" asp-route-organizationId="@organization.Id"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add course</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-journal-bookmark" aria-hidden="true"></i>
+        <p>No courses yet. Add one with how long and how often it meets, what its room needs and who can teach it.</p>
+    </div>
+}
+else
+{
+    <div class="course-list">
+        @foreach (var overview in Model)
+        {
+            var course = overview.Course;
+            <a class="course-row" asp-action="Details" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id">
+                <div class="course-main">
+                    <h2 lang="@course.Name.Language()">@course.Name</h2>
+                    <div class="text-muted small">
+                        @course.SessionsPerWeek × @DisplayNames.Minutes(course.SessionMinutes) a week
+                        @if (course.Teachers.Count > 0)
+                        {
+                            <span>· @string.Join(", ", course.Teachers.Select(t => t.Teacher!.FullName))</span>
+                        }
+                    </div>
+                    @* Group problems too ("Group A: no teacher yet."), so the list shows everything that needs attention. *@
+                    @{
+                        var groupWarnings = course.Groups.OrderBy(g => g.Name)
+                            .Where(g => overview.GroupWarnings.ContainsKey(g.Id))
+                            .Select(g => $"Group {g.Name}: {char.ToLower(overview.GroupWarnings[g.Id][0])}{overview.GroupWarnings[g.Id][1..]}");
+                        var allWarnings = overview.Warnings.Concat(groupWarnings).ToList();
+                    }
+                    @if (allWarnings.Count > 0)
+                    {
+                        <ul class="warning-list">
+                            @foreach (var warning in allWarnings)
+                            {
+                                <li><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> @warning</li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="course-stats">
+                    <div><strong>@course.Groups.Count</strong> <span>group@(course.Groups.Count == 1 ? "" : "s")</span></div>
+                    <div><strong>@overview.Enrolled/@overview.Places</strong> <span>places taken</span></div>
+                </div>
+            </a>
+        }
+    </div>
+}

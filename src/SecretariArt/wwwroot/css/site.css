@@ -172,3 +172,82 @@ body.auth { min-height: 100vh; background: radial-gradient(circle at 15% 20%, #5
     .auth-panel { grid-template-columns: 1fr; gap: 1.5rem; }
     .auth-intro h1 { font-size: 1.9rem; margin-top: 1rem; }
 }
+
+/* ---- Administration (milestone 2) ---- */
+.narrow-wide { max-width: 52rem; }
+.back-link { display: inline-block; margin-bottom: 1rem; text-decoration: none; font-weight: 500; }
+fieldset legend.section-title { float: none; }
+
+/* Checkbox lists as chips: days, room features, teachers, courses, students. */
+.check-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.check-chip { cursor: pointer; margin: 0; }
+.check-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.check-chip span {
+    display: inline-block; padding: 0.35rem 0.8rem; border: 1px solid var(--sa-line); border-radius: 2rem;
+    background: var(--sa-card); font-size: 0.92rem;
+}
+.check-chip input:checked + span { border-color: var(--sa-violet-600); background: var(--sa-violet-100); color: var(--sa-violet); font-weight: 600; }
+/* The tick makes the choice readable without relying on colour. */
+.check-chip input:checked + span::before { content: "\2713\00a0"; }
+.check-chip input:focus-visible + span { outline: 2px solid var(--sa-violet-600); outline-offset: 1px; }
+.check-grid.days .check-chip span { min-width: 3.6rem; text-align: center; }
+.check-grid.students { max-height: 16rem; overflow-y: auto; padding: 0.25rem; }
+
+.feature-badge {
+    display: inline-block; margin: 0.1rem 0.2rem 0.1rem 0; padding: 0.1rem 0.55rem; border-radius: 1rem;
+    background: #eef3f8; color: #2b4a66; font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+}
+.course-chip {
+    display: inline-block; margin: 0.1rem 0.25rem 0.1rem 0; padding: 0.15rem 0.6rem; border-radius: 0.4rem;
+    background: var(--sa-violet-100); font-size: 0.85rem;
+}
+
+.warning-list { list-style: none; padding: 0; margin: 0.5rem 0 0; font-size: 0.88rem; color: #8a5a10; }
+.warning-list li { margin-top: 0.15rem; }
+
+.course-list { display: grid; gap: 0.75rem; }
+.course-row {
+    display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; background: var(--sa-card);
+    border: 1px solid var(--sa-line); border-left: 4px solid var(--sa-violet); border-radius: var(--sa-radius);
+    color: inherit; text-decoration: none; transition: box-shadow 0.15s;
+}
+.course-row:hover { box-shadow: 0 6px 16px rgba(31, 26, 46, 0.08); color: inherit; }
+.course-row h2 { font-size: 1.2rem; margin: 0 0 0.2rem; }
+.course-stats { display: flex; gap: 1.25rem; text-align: right; white-space: nowrap; }
+.course-stats strong { display: block; font-size: 1.25rem; color: var(--sa-violet); }
+.course-stats span { font-size: 0.8rem; color: var(--sa-muted); }
+
+.detail-card, .group-card, .setup-card {
+    background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); padding: 1.25rem;
+}
+.facts { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; margin: 0.75rem 0 0; }
+.facts dt { font-size: 0.8rem; color: var(--sa-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.facts dd { margin: 0; }
+
+.group-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.group-card h3 { font-size: 1.15rem; margin: 0 0 0.15rem; }
+.capacity-bar { height: 0.4rem; background: var(--sa-violet-100); border-radius: 1rem; margin: 0.75rem 0; overflow: hidden; }
+.capacity-bar span { display: block; height: 100%; background: var(--sa-violet-600); }
+.roster { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.25rem 1rem; }
+.roster a { text-decoration: none; }
+/* Name, "via bundle" and the remove button stay on one row; long text wraps inside its own part, so the button
+   never drops onto the next line, where it would read as belonging to the next student. */
+.roster li { display: flex; align-items: baseline; gap: 0.35rem; }
+.roster li > form { margin-left: auto; flex-shrink: 0; }
+.add-students { margin-top: 0.75rem; }
+.add-students summary { cursor: pointer; color: var(--sa-violet-600); font-weight: 500; margin-bottom: 0.5rem; }
+
+.bundle-courses { padding-left: 1.1rem; margin-bottom: 0.75rem; }
+
+.setup-card { border-left: 4px solid var(--sa-amber); }
+.setup-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+.setup-steps i { color: var(--sa-muted); margin-right: 0.3rem; }
+.setup-steps .done { color: var(--sa-muted); text-decoration: line-through; }
+.setup-steps .done i { color: #1f6b43; }
+
+@media (max-width: 575.98px) {
+    .course-row { flex-direction: column; }
+    .course-stats { text-align: left; }
+    .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+    .admin-tabs .nav-link { white-space: nowrap; }
+}

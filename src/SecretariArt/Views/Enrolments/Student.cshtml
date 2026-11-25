@@ -1,0 +1,139 @@
+@model StudentEnrolmentsViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var student = Model.Student.Student;
+    ViewData["Title"] = $"{student.FullName} · Enrolments · {organization.Name}";
+    string here = Context.Request.Path;
+    var taking = Model.Student.Enrolments.ToDictionary(e => e.CourseId);
+    int weeklyMinutes = Model.Student.Enrolments.Sum(e => e.Course!.SessionMinutes * e.Course.SessionsPerWeek);
+}
+
+<partial name="_AdminHeader" model="@("enrolments")" />
+
+<a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All students</a>
+
+<section class="detail-card mb-4">
+    <h2 class="mb-1" lang="@student.FullName.Language()">@student.FullName</h2>
+    <div class="text-muted">@student.Email @(student.PhoneNumber != null ? $"· {student.PhoneNumber}" : "")</div>
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <h2 class="section-title">Courses <span class="badge text-bg-secondary">@Model.Student.Enrolments.Count</span></h2>
+        @if (Model.Student.Enrolments.Count == 0)
+        {
+            <div class="empty-state small"><i class="bi bi-journal" aria-hidden="true"></i><p>Not enrolled in anything yet.</p></div>
+        }
+        else
+        {
+            <div class="table-responsive table-card">
+                <table class="table align-middle mb-0 table-stack">
+                    <thead><tr><th>Course</th><th>Group</th><th>Teacher</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var enrolment in Model.Student.Enrolments)
+                        {
+                            <tr>
+                                <td data-label="Course">
+                                    <a asp-controller="Courses" asp-action="Details" asp-route-organizationId="@organization.Id" asp-route-courseId="@enrolment.CourseId">@enrolment.Course!.Name</a>
+                                    @if (enrolment.Bundle != null)
+                                    {
+                                        <div class="text-muted small">via @enrolment.Bundle.Name</div>
+                                    }
+                                </td>
+                                <td data-label="Group">@enrolment.Group!.Name</td>
+                                <td data-label="Teacher">@(enrolment.Group.Teacher?.FullName ?? "Not decided yet")</td>
+                                <td class="text-end text-nowrap table-actions">
+                                    <form asp-action="Unenrol" asp-route-organizationId="@organization.Id" asp-route-enrolmentId="@enrolment.Id"
+                                          asp-route-returnUrl="@here" method="post" class="d-inline"
+                                          data-confirm="Remove @student.FullName from @enrolment.Course!.Name?">
+                                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg" aria-hidden="true"></i> Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-muted small mt-2">@DisplayNames.Minutes(weeklyMinutes) of classes a week.</p>
+        }
+    </div>
+
+    <div class="col-lg-5">
+        <section class="form-card mb-4">
+            <h2 class="section-title">Enrol in a course</h2>
+            @{
+                var choices = Model.Courses.Where(c => c.Course.Groups.Count > 0).ToList();
+            }
+            @if (choices.Count == 0)
+            {
+                <p class="text-muted mb-0">No course has a group yet. Add groups on the
+                    <a asp-controller="Courses" asp-action="Index" asp-route-organizationId="@organization.Id">Courses</a> tab.</p>
+            }
+            else
+            {
+                <form asp-action="EnrolInGroup" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post">
+                    <label for="GroupId" class="form-label">Course and group</label>
+                    <select id="GroupId" name="GroupId" class="form-select mb-2" required>
+                        <option value="">Choose…</option>
+                        @foreach (var overview in choices)
+                        {
+                            taking.TryGetValue(overview.Course.Id, out var current);
+                            <optgroup label="@overview.Course.Name">
+                                @foreach (var group in overview.Course.Groups)
+                                {
+                                    int free = group.Capacity - group.Enrolments.Count;
+                                    bool isCurrent = current?.GroupId == group.Id;
+                                    // They can't be a student in a group they teach: shown, but not offered.
+                                    bool teaches = group.TeacherId == student.Id;
+                                    string label = $"Group {group.Name} · " +
+                                                   (teaches ? "they teach it" : free > 0 ? $"{free} free" : "full") +
+                                                   (teaches ? "" : isCurrent ? " · current" : current != null ? " · move here" : "");
+                                    <option value="@group.Id" disabled="@(free <= 0 || isCurrent || teaches)">@label</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <div class="form-text mb-2">Choosing another group of a course they already take moves them there.</div>
+                    <button type="submit" class="btn btn-primary">Enrol</button>
+                </form>
+            }
+        </section>
+
+        <section class="form-card">
+            <h2 class="section-title">Enrol in a bundle</h2>
+            @if (Model.Bundles.Count == 0)
+            {
+                <p class="text-muted mb-0">No bundles yet. Make one on the
+                    <a asp-controller="Bundles" asp-action="Index" asp-route-organizationId="@organization.Id">Bundles</a> tab.</p>
+            }
+            else
+            {
+                var groupNames = Model.SharedGroupNames.ToList();
+                <form asp-action="EnrolInBundle" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post">
+                    <label for="BundleId" class="form-label">Bundle</label>
+                    <select id="BundleId" name="BundleId" class="form-select mb-2" required>
+                        <option value="">Choose…</option>
+                        @foreach (var bundle in Model.Bundles)
+                        {
+                            <option value="@bundle.Id">@bundle.Name (@DisplayNames.Plural(bundle.Courses.Count, "course"))</option>
+                        }
+                    </select>
+                    @if (groupNames.Count > 0)
+                    {
+                        <label for="PreferredGroup" class="form-label">Keep them in group</label>
+                        <select id="PreferredGroup" name="PreferredGroup" class="form-select mb-2">
+                            <option value="">Whichever has room</option>
+                            @foreach (string name in groupNames)
+                            {
+                                <option value="@name">@name</option>
+                            }
+                        </select>
+                    }
+                    <div class="form-text mb-2">Courses they already take are left as they are. Where the chosen group is full,
+                        they go to the group with the most free places.</div>
+                    <button type="submit" class="btn btn-primary">Enrol in bundle</button>
+                </form>
+            }
+        </section>
+    </div>
+</div>

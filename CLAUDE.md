@@ -28,6 +28,8 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
 - Everything requires sign-in (fallback policy). Organisation admin pages use the `OrganizationAdmin` policy, which reads
   `{organizationId}` from the route: every admin route must contain it.
 - Any organisation-owned data must carry `OrganizationId`, and queries must filter by it.
+- Admin tabs derive from `OrganizationAdminController` (routes `admin/{organizationId}/...`); redirect with
+  `ReportAndRedirect`, which keeps the organisation id. A student takes a course in one group (unique index).
 
 ## Conventions
 - Registrations live in `Extensions/ServiceCollectionExtensions.cs`; `Program.cs` stays short.
@@ -41,9 +43,11 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
 ## Demo data (Development)
 Password for every demo account: `Demo!2026`. Platform admin `platform@demo.secretariart.app`; Eleni (admin, Athens Drama
 School, code ATHENS26), Nikos (admin, Patras Dance Studio, PATRAS26), Dimitra (teacher Athens + student Patras),
-Giorgos (student Athens), Katerina (pending student Athens), Sofia (pending organisation request). See `Data/DbInitializer.cs`.
+Giorgos (student Athens), Katerina (pending student Athens), Sofia (pending organisation request). Milestone 2 adds
+rules, classrooms, courses with groups, the "Year 1 – Acting" bundle and enrolments for Athens (plus teacher Petros and
+students Maria, Yannis, Eleftheria, Christos, Ioanna, Stavros) and Patras (teacher Elena). See `Data/DbInitializer.cs`.
 
 ## Roadmap
 Plan with milestones: 1 accounts & organisations (done) · 2 administration (rules, classrooms, courses/groups/bundles,
-enrolments) · 3 schedules by hand (availability, editor with conflict checks, calendars, notifications) · 4 payments ·
-5 automatic generation with Google OR-Tools CP-SAT · 6 polish.
+enrolments; done) · 3 schedules by hand (availability, editor with conflict checks, calendars, notifications) ·
+4 payments · 5 automatic generation with Google OR-Tools CP-SAT · 6 polish.

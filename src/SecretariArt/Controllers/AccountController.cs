@@ -106,7 +106,7 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
         return View(model);
     }
 
-    [Authorize]
+    // Anonymous like the rest of the controller: signing out someone who isn't signed in does nothing.
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {

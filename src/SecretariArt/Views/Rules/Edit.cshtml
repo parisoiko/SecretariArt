@@ -1,0 +1,117 @@
+@model RulesViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Rules · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("rules")" />
+
+<div class="narrow-wide">
+    <p class="text-muted">
+        The limits every timetable here keeps to. Courses are checked against them now; the schedule will be built
+        within them.
+        @if (!Model.Saved)
+        {
+            <strong>These are suggested defaults; nothing is saved yet.</strong>
+        }
+        else if (Model.UpdatedAt is DateTime updated)
+        {
+            <span>Last saved @updated.ToLocalTime().ToString("d MMM yyyy, HH:mm").</span>
+        }
+    </p>
+
+    <form asp-action="Edit" asp-route-organizationId="@organization.Id" method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <fieldset class="mb-4">
+            <legend class="section-title">When teaching happens</legend>
+            <div class="mb-3">
+                <span class="form-label d-block">Teaching days</span>
+                <div class="check-grid days">
+                    @foreach (var day in DisplayNames.AllDays)
+                    {
+                        <label class="check-chip">
+                            <input type="checkbox" name="Days" value="@day" checked="@Model.Days.Contains(day)" />
+                            <span>@day.ToString()[..3]</span>
+                        </label>
+                    }
+                </div>
+                <span asp-validation-for="Days" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="row g-3">
+                <div class="col-sm-4">
+                    <label asp-for="DayStarts" class="form-label"></label>
+                    <input asp-for="DayStarts" type="time" asp-format="{0:HH:mm}" class="form-control" />
+                    <span asp-validation-for="DayStarts" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-4">
+                    <label asp-for="DayEnds" class="form-label"></label>
+                    <input asp-for="DayEnds" type="time" asp-format="{0:HH:mm}" class="form-control" />
+                    <span asp-validation-for="DayEnds" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-4">
+                    <label asp-for="SlotMinutes" class="form-label"></label>
+                    <select asp-for="SlotMinutes" class="form-select"
+                            asp-items="@OrganizationRulesDefaults.SlotChoices.Select(m => new SelectListItem($"{m} minutes", m.ToString()))"></select>
+                    <span asp-validation-for="SlotMinutes" class="invalid-feedback d-block"></span>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="mb-4">
+            <legend class="section-title">Sessions</legend>
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <label asp-for="MinSessionMinutes" class="form-label"></label>
+                    <input asp-for="MinSessionMinutes" type="number" class="form-control" />
+                    <span asp-validation-for="MinSessionMinutes" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="MaxSessionMinutes" class="form-label"></label>
+                    <input asp-for="MaxSessionMinutes" type="number" class="form-control" />
+                    <span asp-validation-for="MaxSessionMinutes" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="MinSessionsPerWeek" class="form-label"></label>
+                    <input asp-for="MinSessionsPerWeek" type="number" class="form-control" />
+                    <span asp-validation-for="MinSessionsPerWeek" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="MaxSessionsPerWeek" class="form-label"></label>
+                    <input asp-for="MaxSessionsPerWeek" type="number" class="form-control" />
+                    <span asp-validation-for="MaxSessionsPerWeek" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="BreakBetweenSessionsMinutes" class="form-label"></label>
+                    <input asp-for="BreakBetweenSessionsMinutes" type="number" class="form-control" />
+                    <span asp-validation-for="BreakBetweenSessionsMinutes" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="MaxTeachingHoursPerDay" class="form-label"></label>
+                    <input asp-for="MaxTeachingHoursPerDay" type="number" class="form-control" />
+                    <span asp-validation-for="MaxTeachingHoursPerDay" class="invalid-feedback d-block"></span>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="mb-4">
+            <legend class="section-title">Term</legend>
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <label asp-for="TermStarts" class="form-label"></label>
+                    <input asp-for="TermStarts" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" />
+                    <span asp-validation-for="TermStarts" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="col-sm-6">
+                    <label asp-for="TermEnds" class="form-label"></label>
+                    <input asp-for="TermEnds" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" />
+                    <span asp-validation-for="TermEnds" class="invalid-feedback d-block"></span>
+                </div>
+            </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary">Save rules</button>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

@@ -14,6 +14,8 @@ public interface IMembershipService
     Task<ServiceResult> ApproveAsync(int organizationId, int membershipId);
     Task<ServiceResult> RejectAsync(int organizationId, int membershipId, string reason);
     Task<bool> IsActiveAdminAsync(string userId, int organizationId);
+    Task<List<ApplicationUser>> GetActivePeopleAsync(int organizationId, MembershipRole role);
+    Task<bool> HasActiveRoleAsync(string userId, int organizationId, MembershipRole role);
 }
 
 public class MembershipService(SecretariArtDbContext db, TimeProvider clock) : IMembershipService
@@ -154,6 +156,18 @@ public class MembershipService(SecretariArtDbContext db, TimeProvider clock) : I
             m.Role == MembershipRole.Admin &&
             m.Status == MembershipStatus.Active &&
             m.Organization!.Status == OrganizationStatus.Active);
+
+    // The approved teachers (or students) of an organisation, for choosing who teaches or who is enrolled.
+    public Task<List<ApplicationUser>> GetActivePeopleAsync(int organizationId, MembershipRole role) =>
+        db.Memberships.AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId && m.Role == role && m.Status == MembershipStatus.Active)
+            .Select(m => m.User!)
+            .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
+            .ToListAsync();
+
+    public Task<bool> HasActiveRoleAsync(string userId, int organizationId, MembershipRole role) =>
+        db.Memberships.AnyAsync(m => m.UserId == userId && m.OrganizationId == organizationId &&
+                                     m.Role == role && m.Status == MembershipStatus.Active);
 
     // Filtering by organisation too means an admin can never decide on another organisation's requests.
     private Task<Membership?> FindForDecisionAsync(int organizationId, int membershipId) =>

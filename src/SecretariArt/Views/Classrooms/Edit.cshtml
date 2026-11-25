@@ -1,0 +1,60 @@
+@model ClassroomViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    string heading = Model.Id == null ? "Add a classroom" : $"Edit {Model.Name}";
+    ViewData["Title"] = $"{heading} · {organization.Name}";
+    var floors = Enum.GetValues<FloorType>().Select(f => new SelectListItem(f.Display(), f.ToString()));
+}
+
+<partial name="_AdminHeader" model="@("classrooms")" />
+
+<div class="narrow">
+    <h2 class="section-title">@heading</h2>
+    <form method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-sm-8">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" placeholder="e.g. Studio 2, Black box, Room 104" autofocus />
+                <span asp-validation-for="Name" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-sm-4">
+                <label asp-for="Capacity" class="form-label"></label>
+                <input asp-for="Capacity" type="number" min="1" class="form-control" />
+                <span asp-validation-for="Capacity" class="invalid-feedback d-block"></span>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label asp-for="Floor" class="form-label"></label>
+            <select asp-for="Floor" asp-items="floors" class="form-select"></select>
+            <span asp-validation-for="Floor" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="mb-3">
+            <span class="form-label d-block">Features</span>
+            <div class="check-grid">
+                @foreach (var feature in DisplayNames.AllFeatures)
+                {
+                    <label class="check-chip">
+                        <input type="checkbox" name="Features" value="@feature" checked="@Model.Features.Contains(feature)" />
+                        <span>@feature.Display()</span>
+                    </label>
+                }
+            </div>
+        </div>
+        <div class="form-check mb-3">
+            <input asp-for="StepFreeAccess" class="form-check-input" />
+            <label asp-for="StepFreeAccess" class="form-check-label"></label>
+        </div>
+        <div class="mb-4">
+            <label asp-for="Notes" class="form-label"></label>
+            <textarea asp-for="Notes" class="form-control" rows="2" maxlength="500" placeholder="e.g. Second floor, no lift; key at reception"></textarea>
+            <span asp-validation-for="Notes" class="invalid-feedback d-block"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary">@(Model.Id == null ? "Add classroom" : "Save")</button>
+        <a class="btn btn-link" asp-action="Index" asp-route-organizationId="@organization.Id">Cancel</a>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

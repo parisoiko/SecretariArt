@@ -1,0 +1,57 @@
+@model List<Bundle>
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Bundles · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("bundles")" />
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <p class="text-muted mb-0">Sets of courses taken together, such as a year of a programme. Enrol a student in a bundle to give them all its courses at once.</p>
+    <a class="btn btn-primary" asp-action="Create" asp-route-organizationId="@organization.Id"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add bundle</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-collection" aria-hidden="true"></i>
+        <p>No bundles yet. Make one (e.g. "Year 1") from courses you've already added.</p>
+    </div>
+}
+else
+{
+    <div class="org-grid">
+        @foreach (var bundle in Model)
+        {
+            var courses = bundle.Courses.Select(l => l.Course!).OrderBy(c => c.Name).ToList();
+            int weeklyMinutes = courses.Sum(c => c.SessionMinutes * c.SessionsPerWeek);
+            <article class="org-card">
+                <div class="org-type">@DisplayNames.Plural(courses.Count, "course") · @DisplayNames.Minutes(weeklyMinutes) a week</div>
+                <h2 lang="@bundle.Name.Language()">@bundle.Name</h2>
+                @if (bundle.Description != null)
+                {
+                    <p class="text-muted small">@bundle.Description</p>
+                }
+                <ul class="bundle-courses">
+                    @foreach (var course in courses)
+                    {
+                        <li>
+                            <a asp-controller="Courses" asp-action="Details" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id">@course.Name</a>
+                            @if (course.Groups.Count == 0)
+                            {
+                                <span class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> no groups</span>
+                            }
+                        </li>
+                    }
+                </ul>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-organizationId="@organization.Id" asp-route-bundleId="@bundle.Id"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
+                    <form asp-action="Delete" asp-route-organizationId="@organization.Id" asp-route-bundleId="@bundle.Id" method="post"
+                          data-confirm="Delete the bundle @bundle.Name? Students enrolled through it keep their courses.">
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
+                    </form>
+                </div>
+            </article>
+        }
+    </div>
+}

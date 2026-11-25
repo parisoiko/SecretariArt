@@ -12,7 +12,10 @@ namespace SecretariArt.Controllers;
 public class AdministrationController(
     ICurrentUserMemberships currentMemberships,
     IOrganizationService organizations,
-    IMembershipService memberships) : Controller
+    IMembershipService memberships,
+    IRulesService rules,
+    IClassroomService classrooms,
+    ICourseService courses) : Controller
 {
     // Administration of a single organisation goes straight there; several get a chooser.
     [HttpGet("")]
@@ -38,6 +41,8 @@ public class AdministrationController(
     {
         Organization organization = (await organizations.FindAsync(organizationId))!;
         List<Membership> all = await memberships.GetForOrganizationAsync(organizationId);
+        List<CourseOverview> courseList = await courses.GetAllAsync(organizationId);
+        ViewData["Organization"] = organization; // for the shared header and tabs
 
         return View(new MembersViewModel
         {
@@ -48,6 +53,12 @@ public class AdministrationController(
                 .OrderByDescending(m => m.DecidedAt).Take(MembersViewModel.RejectedShown).ToList(),
             InviteLink = Url.Action("JoinWithCode", "Organizations", new { code = organization.InviteCode },
                 Request.Scheme)!,
+            Setup = new SetupProgress(
+                RulesSaved: await rules.HasSavedAsync(organizationId),
+                HasClassrooms: (await classrooms.GetAllAsync(organizationId)).Count > 0,
+                HasCourseWithGroup: courseList.Any(c => c.Course.Groups.Count > 0),
+                HasStudents: all.Any(m => m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active),
+                HasEnrolments: courseList.Any(c => c.Enrolled > 0)),
         });
     }
 

@@ -6,9 +6,9 @@
 </header>
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link @(Model == "waiting" ? "active" : "")" asp-action="Organizations"><i class="bi bi-inbox"></i> Waiting</a>
+        <a class="nav-link @(Model == "waiting" ? "active" : "")" aria-current="@(Model == "waiting" ? "page" : null)" asp-action="Organizations"><i class="bi bi-inbox" aria-hidden="true"></i> Waiting</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(Model == "all" ? "active" : "")" asp-action="AllOrganizations"><i class="bi bi-buildings"></i> All organisations</a>
+        <a class="nav-link @(Model == "all" ? "active" : "")" aria-current="@(Model == "all" ? "page" : null)" asp-action="AllOrganizations"><i class="bi bi-buildings" aria-hidden="true"></i> All organisations</a>
     </li>
 </ul>

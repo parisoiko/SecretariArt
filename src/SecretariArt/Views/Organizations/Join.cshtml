@@ -32,11 +32,11 @@
             <div class="role-options">
                 <label class="role-option">
                     <input type="radio" asp-for="Role" value="@MembershipRole.Student" />
-                    <span><i class="bi bi-mortarboard"></i> Student</span>
+                    <span><i class="bi bi-mortarboard" aria-hidden="true"></i> Student</span>
                 </label>
                 <label class="role-option">
                     <input type="radio" asp-for="Role" value="@MembershipRole.Teacher" />
-                    <span><i class="bi bi-easel"></i> Teacher</span>
+                    <span><i class="bi bi-easel" aria-hidden="true"></i> Teacher</span>
                 </label>
             </div>
             <span asp-validation-for="Role" class="invalid-feedback d-block"></span>

@@ -6,5 +6,16 @@
     // before the mouse is released, and the click misses (seen in QA). Fields are still checked on submit, and
     // re-checked as you type once they've been flagged.
     $.validator.setDefaults({ onfocusout: false });
+
+    // jQuery Validation also checks the min / max / step attributes of number fields, with its own American-style
+    // wording ("Please enter a multiple of 15."). Same plain style as the rest of the site.
+    $.extend($.validator.messages, {
+        required: 'Fill this in.',
+        number: 'Enter a number.',
+        digits: 'Enter a whole number.',
+        min: $.validator.format('Enter {0} or more.'),
+        max: $.validator.format('Enter {0} or less.'),
+        step: (step) => Number(step) === 1 ? 'Enter a whole number.' : `Enter a multiple of ${step}.`,
+    });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jquery-validation-unobtrusive@4.0.0/dist/jquery.validate.unobtrusive.min.js"></script>

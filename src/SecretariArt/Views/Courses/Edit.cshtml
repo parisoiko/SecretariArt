@@ -1,0 +1,91 @@
+@model CourseViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    string heading = Model.Id == null ? "Add a course" : $"Edit {Model.Name}";
+    ViewData["Title"] = $"{heading} · {organization.Name}";
+    var rules = Model.Rules;
+}
+
+<partial name="_AdminHeader" model="@("courses")" />
+
+<div class="narrow">
+    <h2 class="section-title">@heading</h2>
+    <form method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" placeholder="e.g. Acting I, Ballet for beginners, Life drawing" autofocus />
+            <span asp-validation-for="Name" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="Description" class="form-label"></label>
+            <textarea asp-for="Description" class="form-control" rows="2" maxlength="500"></textarea>
+            <span asp-validation-for="Description" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="row g-3 mb-1">
+            <div class="col-sm-6">
+                <label asp-for="SessionMinutes" class="form-label"></label>
+                <input asp-for="SessionMinutes" type="number" step="@rules.SlotMinutes" class="form-control" />
+                <span asp-validation-for="SessionMinutes" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-sm-6">
+                <label asp-for="SessionsPerWeek" class="form-label"></label>
+                <input asp-for="SessionsPerWeek" type="number" class="form-control" />
+                <span asp-validation-for="SessionsPerWeek" class="invalid-feedback d-block"></span>
+            </div>
+        </div>
+        <p class="form-text mb-3">
+            Your rules allow sessions of @DisplayNames.Minutes(rules.MinSessionMinutes)–@DisplayNames.Minutes(rules.MaxSessionMinutes)
+            in steps of @rules.SlotMinutes minutes, @rules.MinSessionsPerWeek–@rules.MaxSessionsPerWeek times a week.
+            <a asp-controller="Rules" asp-action="Edit" asp-route-organizationId="@organization.Id">Change the rules</a>
+        </p>
+        <div class="mb-3">
+            <span class="form-label d-block">The room needs</span>
+            <div class="check-grid">
+                @foreach (var feature in DisplayNames.AllFeatures)
+                {
+                    <label class="check-chip">
+                        <input type="checkbox" name="RequiredFeatures" value="@feature" checked="@Model.RequiredFeatures.Contains(feature)" />
+                        <span>@feature.Display()</span>
+                    </label>
+                }
+            </div>
+        </div>
+        <div class="mb-4">
+            <span class="form-label d-block">Teachers who can teach it</span>
+            @if (Model.AvailableTeachers.Count == 0)
+            {
+                <p class="text-muted small mb-0">
+                    No approved teachers yet. Share your invite code on the
+                    <a asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Id">Members</a>
+                    tab; you can add teachers to the course later.
+                </p>
+            }
+            else
+            {
+                <div class="check-grid">
+                    @foreach (var teacher in Model.AvailableTeachers)
+                    {
+                        <label class="check-chip">
+                            <input type="checkbox" name="TeacherIds" value="@teacher.Id" checked="@Model.TeacherIds.Contains(teacher.Id)" />
+                            <span lang="@teacher.FullName.Language()">@teacher.FullName</span>
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+
+        <button type="submit" class="btn btn-primary">@(Model.Id == null ? "Add course" : "Save")</button>
+        @if (Model.Id == null)
+        {
+            <a class="btn btn-link" asp-action="Index" asp-route-organizationId="@organization.Id">Cancel</a>
+        }
+        else
+        {
+            <a class="btn btn-link" asp-action="Details" asp-route-organizationId="@organization.Id" asp-route-courseId="@Model.Id">Cancel</a>
+        }
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

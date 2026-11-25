@@ -60,6 +60,14 @@ public class MembersViewModel
     public required IReadOnlyList<Membership> Rejected { get; init; }
 
     public required string InviteLink { get; init; }
+
+    public required SetupProgress Setup { get; init; }
+}
+
+// The "Getting started" checklist on the Members page, hidden once everything is done.
+public record SetupProgress(bool RulesSaved, bool HasClassrooms, bool HasCourseWithGroup, bool HasStudents, bool HasEnrolments)
+{
+    public bool IsComplete => RulesSaved && HasClassrooms && HasCourseWithGroup && HasStudents && HasEnrolments;
 }
 
 // The reject page, for a join request or an organisation request: the reason is shown to the person turned down.

@@ -1,0 +1,55 @@
+@model BundleViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    string heading = Model.Id == null ? "Add a bundle" : $"Edit {Model.Name}";
+    ViewData["Title"] = $"{heading} · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("bundles")" />
+
+<div class="narrow">
+    <h2 class="section-title">@heading</h2>
+    @if (Model.AvailableCourses.Count == 0)
+    {
+        <div class="empty-state small">
+            <i class="bi bi-journal-bookmark" aria-hidden="true"></i>
+            <p>A bundle is made of courses, and there are none yet.
+               <a asp-controller="Courses" asp-action="Create" asp-route-organizationId="@organization.Id">Add a course</a> first.</p>
+        </div>
+    }
+    else
+    {
+        <form method="post" class="form-card" novalidate>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" placeholder="e.g. Year 1, Foundation, Summer intensive" autofocus />
+                <span asp-validation-for="Name" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="2" maxlength="500"></textarea>
+                <span asp-validation-for="Description" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="mb-4">
+                <span class="form-label d-block">Courses</span>
+                <div class="check-grid">
+                    @foreach (var course in Model.AvailableCourses)
+                    {
+                        <label class="check-chip">
+                            <input type="checkbox" name="CourseIds" value="@course.Id" checked="@Model.CourseIds.Contains(course.Id)" />
+                            <span lang="@course.Name.Language()">@course.Name</span>
+                        </label>
+                    }
+                </div>
+                <span asp-validation-for="CourseIds" class="invalid-feedback d-block"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">@(Model.Id == null ? "Add bundle" : "Save")</button>
+            <a class="btn btn-link" asp-action="Index" asp-route-organizationId="@organization.Id">Cancel</a>
+        </form>
+    }
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

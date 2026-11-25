@@ -1,0 +1,62 @@
+@model string
+@inject ICurrentUserMemberships CurrentMemberships
+@*
+    Header and tabs for every administration page of one organisation. The model is the active tab; the organisation
+    comes from ViewData (set by OrganizationAdminController for every action).
+*@
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var others = (await CurrentMemberships.GetAsync())
+        .Where(m => m.Role == MembershipRole.Admin && m.Status == MembershipStatus.Active &&
+                    m.Organization!.Status == OrganizationStatus.Active && m.OrganizationId != organization.Id)
+        .Select(m => m.Organization!).ToList();
+    (string Key, string Controller, string Action, string Icon, string Label)[] tabs =
+    [
+        ("members", "Administration", "Members", "bi-people", "Members"),
+        ("rules", "Rules", "Edit", "bi-list-check", "Rules"),
+        ("classrooms", "Classrooms", "Index", "bi-door-open", "Classrooms"),
+        ("courses", "Courses", "Index", "bi-journal-bookmark", "Courses"),
+        ("bundles", "Bundles", "Index", "bi-collection", "Bundles"),
+        ("enrolments", "Enrolments", "Index", "bi-person-check", "Enrolments"),
+    ];
+}
+
+<header class="page-header d-flex flex-wrap justify-content-between align-items-end gap-2">
+    <div>
+        <div class="org-type">Administration</div>
+        <h1 lang="@organization.Name.Language()">@organization.Name</h1>
+    </div>
+    @if (others.Count > 0)
+    {
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-arrow-left-right" aria-hidden="true"></i> Switch organisation
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                @foreach (var other in others)
+                {
+                    <li><a class="dropdown-item" lang="@other.Name.Language()" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@other.Id">@other.Name</a></li>
+                }
+            </ul>
+        </div>
+    }
+</header>
+
+<nav aria-label="Administration sections">
+    <ul class="nav nav-tabs admin-tabs mb-4">
+        @foreach (var tab in tabs)
+        {
+            bool active = tab.Key == Model;
+            <li class="nav-item">
+                <a class="nav-link @(active ? "active" : "")" aria-current="@(active ? "page" : null)"
+                   asp-controller="@tab.Controller" asp-action="@tab.Action" asp-route-organizationId="@organization.Id">
+                    <i class="bi @tab.Icon" aria-hidden="true"></i> @tab.Label
+                </a>
+            </li>
+        }
+    </ul>
+</nav>
+<script>
+    // On a phone the tabs scroll sideways; bring the current one into view so people see where they are.
+    document.querySelector('.admin-tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+</script>

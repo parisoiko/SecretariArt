@@ -1,0 +1,167 @@
+@model CourseDetailsViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var overview = Model.Overview;
+    var course = overview.Course;
+    ViewData["Title"] = $"{course.Name} · {organization.Name}";
+    string here = Context.Request.Path;
+    int groupCount = course.Groups.Count;
+}
+
+<partial name="_AdminHeader" model="@("courses")" />
+
+<a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All courses</a>
+
+<section class="detail-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+        <div>
+            <h2 class="mb-1" lang="@course.Name.Language()">@course.Name</h2>
+            @if (course.Description != null)
+            {
+                <p class="text-muted mb-2">@course.Description</p>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
+            <form asp-action="Delete" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id" method="post"
+                  data-confirm="Delete @course.Name@(groupCount > 0 ? $", with its {DisplayNames.Plural(groupCount, "group")} and {DisplayNames.Plural(overview.Enrolled, "enrolment")}" : "")? This can't be undone.">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
+            </form>
+        </div>
+    </div>
+    <dl class="facts">
+        <div><dt>Meets</dt><dd>@course.SessionsPerWeek × @DisplayNames.Minutes(course.SessionMinutes) a week</dd></div>
+        <div>
+            <dt>Room needs</dt>
+            <dd>
+                @if (course.RequiredFeatures == RoomFeatures.None)
+                {
+                    <span class="text-muted">Any room</span>
+                }
+                @foreach (var feature in course.RequiredFeatures.Split())
+                {
+                    <span class="feature-badge">@feature.Display()</span>
+                }
+            </dd>
+        </div>
+        <div>
+            <dt>Teachers</dt>
+            <dd>@(course.Teachers.Count == 0 ? "None yet" : string.Join(", ", course.Teachers.Select(t => t.Teacher!.FullName)))</dd>
+        </div>
+        @if (course.Bundles.Count > 0)
+        {
+            <div><dt>In bundles</dt><dd>@string.Join(", ", course.Bundles.Select(b => b.Bundle!.Name))</dd></div>
+        }
+    </dl>
+    @if (overview.Warnings.Count > 0)
+    {
+        <ul class="warning-list mb-0">
+            @foreach (var warning in overview.Warnings)
+            {
+                <li><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> @warning</li>
+            }
+        </ul>
+    }
+</section>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h2 class="section-title mb-0">Groups</h2>
+    <a class="btn btn-primary btn-sm" asp-action="CreateGroup" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add group</a>
+</div>
+
+@if (groupCount == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-people" aria-hidden="true"></i>
+        <p>No groups yet. A group is one class of this course (e.g. A, B, Evening) with its own places and teacher.</p>
+    </div>
+}
+
+@foreach (var group in course.Groups)
+{
+    int free = group.Capacity - group.Enrolments.Count;
+    <section class="group-card mb-3" id="group-@group.Id">
+        <div class="group-head">
+            <div>
+                <h3>Group @group.Name</h3>
+                <div class="text-muted small">
+                    @(group.Teacher?.FullName ?? "No teacher yet") ·
+                    @group.Enrolments.Count of @group.Capacity places taken
+                </div>
+                @if (overview.GroupWarnings.TryGetValue(group.Id, out string? groupWarning))
+                {
+                    <div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> @groupWarning</div>
+                }
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="EditGroup" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
+                <form asp-action="DeleteGroup" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id" method="post"
+                      data-confirm="Delete group @group.Name of @course.Name?@(group.Enrolments.Count > 0 ? $" {DisplayNames.Plural(group.Enrolments.Count, "student")} will no longer be enrolled in it." : "")">
+                    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
+                </form>
+            </div>
+        </div>
+        <div class="capacity-bar" role="img" aria-label="@group.Enrolments.Count of @group.Capacity places taken">
+            <span style="width: @(group.Capacity == 0 ? 0 : Math.Min(100, group.Enrolments.Count * 100 / group.Capacity))%"></span>
+        </div>
+
+        @if (group.Enrolments.Count > 0)
+        {
+            <ul class="roster">
+                @foreach (var enrolment in group.Enrolments.OrderBy(e => e.Student!.LastName).ThenBy(e => e.Student!.FirstName))
+                {
+                    <li>
+                        <a lang="@enrolment.Student!.FullName.Language()" asp-controller="Enrolments" asp-action="Student"
+                           asp-route-organizationId="@organization.Id" asp-route-studentId="@enrolment.StudentId">@enrolment.Student!.FullName</a>
+                        @if (enrolment.Bundle != null)
+                        {
+                            <span class="text-muted small">via @enrolment.Bundle.Name</span>
+                        }
+                        <form asp-controller="Enrolments" asp-action="Unenrol" asp-route-organizationId="@organization.Id"
+                              asp-route-enrolmentId="@enrolment.Id" asp-route-returnUrl="@($"{here}#group-{group.Id}")" method="post" class="d-inline"
+                              data-confirm="Remove @enrolment.Student.FullName from @course.Name?">
+                            <button class="btn btn-link btn-sm text-danger p-0 ms-1" aria-label="Remove @enrolment.Student.FullName"><i class="bi bi-x-circle" aria-hidden="true"></i></button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+
+        @* A group's own teacher can't also be one of its students. *@
+        @{ var candidates = Model.StudentsNotTaking.Where(s => s.Id != group.TeacherId).ToList(); }
+        @if (free > 0 && candidates.Count > 0)
+        {
+            <details class="add-students">
+                <summary><i class="bi bi-person-plus" aria-hidden="true"></i> Add students (@free free place@(free == 1 ? "" : "s"))</summary>
+                <form asp-action="AddStudents" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id" method="post">
+                    <input type="search" class="form-control form-control-sm mb-2 student-filter" placeholder="Filter by name" aria-label="Filter students by name" />
+                    <div class="check-grid students">
+                        @foreach (var student in candidates)
+                        {
+                            <label class="check-chip" data-name="@TextMatch.Key(student.FullName)">
+                                <input type="checkbox" name="StudentIds" value="@student.Id" />
+                                <span lang="@student.FullName.Language()">@student.FullName</span>
+                            </label>
+                        }
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary mt-2">Add to group @group.Name</button>
+                </form>
+            </details>
+        }
+        else if (free > 0 && group.Enrolments.Count == 0)
+        {
+            <p class="text-muted small mb-0 mt-2">No approved students yet: share your invite code on the Members tab.</p>
+        }
+    </section>
+}
+
+@section Scripts {
+    <script>
+        // Narrow a long student list by typing part of a name.
+        document.querySelectorAll('.student-filter').forEach(input => input.addEventListener('input', () => {
+            // Same rule as the server (TextMatch): ignore case and accents, so "ΓΕΩΡΓΙΟΥ" finds "Γεωργίου".
+            const term = input.value.trim().normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase().replace(/ς/g, 'σ');
+            input.closest('form').querySelectorAll('[data-name]').forEach(chip => chip.hidden = !chip.dataset.name.includes(term));
+        }));
+    </script>
+}

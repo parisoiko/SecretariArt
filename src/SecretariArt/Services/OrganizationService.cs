@@ -34,7 +34,8 @@ public class OrganizationService(
         }
 
         string name = request.Name.Trim();
-        if (await db.Organizations.AnyAsync(o => o.Name == name && o.Status != OrganizationStatus.Rejected))
+        var taken = await db.Organizations.Where(o => o.Status != OrganizationStatus.Rejected).Select(o => o.Name).ToListAsync();
+        if (taken.Any(n => TextMatch.SameName(n, name)))
         {
             return ServiceResult.Fail("An organisation with this name already exists or is waiting for approval.");
         }

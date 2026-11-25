@@ -22,7 +22,7 @@
 {
     <section class="action-grid mb-4">
         <a class="action-card" asp-controller="Platform" asp-action="Organizations">
-            <i class="bi bi-inbox"></i>
+            <i class="bi bi-inbox" aria-hidden="true"></i>
             <h3>Organisation requests</h3>
             <p>
                 @if (Model.PlatformRequestsWaiting > 0)
@@ -36,7 +36,7 @@
             </p>
         </a>
         <a class="action-card" asp-controller="Platform" asp-action="AllOrganizations">
-            <i class="bi bi-buildings"></i>
+            <i class="bi bi-buildings" aria-hidden="true"></i>
             <h3>All organisations</h3>
             <p>Every organisation on SecretariArt, with past decisions.</p>
         </a>
@@ -63,7 +63,7 @@
                 @if (isAdmin)
                 {
                     <a class="btn btn-sm btn-outline-primary" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Key">
-                        <i class="bi bi-people"></i> Members
+                        <i class="bi bi-people" aria-hidden="true"></i> Members
                         @if (pendingRequests > 0)
                         {
                             <span class="badge text-bg-warning ms-1">@pendingRequests waiting</span>
@@ -118,12 +118,12 @@
 {
     <section class="action-grid">
         <a class="action-card" asp-controller="Organizations" asp-action="Join">
-            <i class="bi bi-person-plus"></i>
+            <i class="bi bi-person-plus" aria-hidden="true"></i>
             <h3>Join an organisation</h3>
             <p>Have an invite code from your school or studio? Join as a student or a teacher.</p>
         </a>
         <a class="action-card" asp-controller="Organizations" asp-action="RequestOrganization">
-            <i class="bi bi-building-add"></i>
+            <i class="bi bi-building-add" aria-hidden="true"></i>
             <h3>Register your organisation</h3>
             <p>Run a school, studio or art space? Ask for it to be set up and you'll become its admin.</p>
         </a>

@@ -1,0 +1,53 @@
+@model GroupViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    string heading = Model.Id == null ? $"Add a group to {Model.Course.Name}" : $"Edit group {Model.Name} of {Model.Course.Name}";
+    ViewData["Title"] = $"{heading} · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("courses")" />
+
+<div class="narrow">
+    <h2 class="section-title">@heading</h2>
+    <form method="post" class="form-card" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" placeholder="e.g. A, B, Evening" autofocus />
+                <span asp-validation-for="Name" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-sm-6">
+                <label asp-for="Capacity" class="form-label"></label>
+                <input asp-for="Capacity" type="number" min="@Math.Max(1, Model.Enrolled)" class="form-control" />
+                <span asp-validation-for="Capacity" class="invalid-feedback d-block"></span>
+                @if (Model.Enrolled > 0)
+                {
+                    <div class="form-text">@Model.Enrolled already enrolled.</div>
+                }
+            </div>
+        </div>
+        <div class="mb-4">
+            <label asp-for="TeacherId" class="form-label"></label>
+            <select asp-for="TeacherId" class="form-select"
+                    asp-items="@Model.CourseTeachers.Select(t => new SelectListItem(t.FullName, t.Id))">
+                <option value="">Not decided yet</option>
+            </select>
+            <div class="form-text">
+                @if (Model.CourseTeachers.Count == 0)
+                {
+                    <text>The course has no teachers yet. </text>
+                }
+                Choose from the course's teachers;
+                <a asp-action="Edit" asp-route-organizationId="@organization.Id" asp-route-courseId="@Model.Course.Id">add teachers to the course</a>
+                to see more here.
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">@(Model.Id == null ? "Add group" : "Save")</button>
+        <a class="btn btn-link" asp-action="Details" asp-route-organizationId="@organization.Id" asp-route-courseId="@Model.Course.Id">Cancel</a>
+    </form>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

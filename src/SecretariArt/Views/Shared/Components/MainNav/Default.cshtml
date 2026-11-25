@@ -5,23 +5,23 @@
             ? "nav-link active" : "nav-link";
 }
 <ul class="navbar-nav ms-auto">
-    <li class="nav-item"><a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-house"></i> Home</a></li>
+    <li class="nav-item"><a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-house" aria-hidden="true"></i> Home</a></li>
     @* Schedule and Payments are personal (a timetable, payment deadlines): an admin-only account has neither yet;
        its schedule and payment tools will live under Administration. *@
     @if (Model.Roles.IsTeacher || Model.Roles.IsStudent)
     {
-        <li class="nav-item"><a class="@Active("Sections", "Schedule")" asp-controller="Sections" asp-action="Schedule"><i class="bi bi-calendar3"></i> Schedule</a></li>
+        <li class="nav-item"><a class="@Active("Sections", "Schedule")" asp-controller="Sections" asp-action="Schedule"><i class="bi bi-calendar3" aria-hidden="true"></i> Schedule</a></li>
     }
     @if (Model.Roles.IsStudent)
     {
-        <li class="nav-item"><a class="@Active("Sections", "Payments")" asp-controller="Sections" asp-action="Payments"><i class="bi bi-wallet2"></i> Payments</a></li>
+        <li class="nav-item"><a class="@Active("Sections", "Payments")" asp-controller="Sections" asp-action="Payments"><i class="bi bi-wallet2" aria-hidden="true"></i> Payments</a></li>
     }
     @if (Model.Roles.IsAdmin)
     {
-        <li class="nav-item"><a class="@Active("Administration")" asp-controller="Administration" asp-action="Index"><i class="bi bi-sliders"></i> Administration</a></li>
+        <li class="nav-item"><a class="@Active("Administration")" asp-controller="Administration" asp-action="Index"><i class="bi bi-sliders" aria-hidden="true"></i> Administration</a></li>
     }
     @if (Model.IsPlatformAdmin)
     {
-        <li class="nav-item"><a class="@Active("Platform")" asp-controller="Platform" asp-action="Organizations"><i class="bi bi-shield-check"></i> Platform</a></li>
+        <li class="nav-item"><a class="@Active("Platform")" asp-controller="Platform" asp-action="Organizations"><i class="bi bi-shield-check" aria-hidden="true"></i> Platform</a></li>
     }
 </ul>
