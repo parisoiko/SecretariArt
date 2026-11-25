@@ -18,6 +18,7 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
 - Test: `dotnet test`
 - Migrations (from `src/SecretariArt/`): `dotnet ef migrations add <Name> -o Data/Migrations`. `dotnet-ef` is a local tool.
 - If F5 is running, `bin/` is locked: build/test with `-o <tmp>`.
+- Manual QA agent: `qa/README.md` (separate app on :5200 with database `SecretariArt_QA`, Playwright tester session).
 
 ## Domain rules
 - One account per person; what they can do comes from `Membership` (user + organisation + role + status). Roles are

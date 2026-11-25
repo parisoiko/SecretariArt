@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Personal notes for Claude
 CLAUDE.local.md
+
+# QA tester output (qa/README.md)
+qa/reports/
