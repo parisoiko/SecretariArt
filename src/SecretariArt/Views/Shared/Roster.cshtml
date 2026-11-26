@@ -1,0 +1,98 @@
+@model RosterViewModel
+@{
+    var roster = Model.Roster;
+    var item = roster.Class;
+    var session = item.Session;
+    ViewData["Title"] = $"{session.Group!.Course!.Name}, {DisplayNames.LongDate(item.Date)}";
+    bool billNoShows = roster.Settings.BillNoShows;
+}
+
+@if (Model.AsAdmin)
+{
+    <partial name="_AdminHeader" model="@("payments")" />
+    <partial name="~/Views/Payments/_PaymentsNav.cshtml" model="@("check-ins")" />
+    <a class="back-link" asp-action="CheckIns" asp-route-organizationId="@item.Organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All classes</a>
+}
+else
+{
+    <a class="back-link" asp-action="Index" asp-route-tab="check-ins"><i class="bi bi-arrow-left" aria-hidden="true"></i> Who's coming</a>
+}
+
+<section class="detail-card mb-4">
+    <h2 class="mb-1" lang="@session.Group.Course.Name.Language()">@session.Group.Course.Name · group @session.Group.Name</h2>
+    <p class="text-muted mb-2">
+        @DisplayNames.LongDate(item.Date), @session.Starts.ToString("HH:mm")–@session.Ends.ToString("HH:mm") · @session.Classroom!.Name ·
+        <span lang="@item.Organization.Name.Language()">@item.Organization.Name</span>
+    </p>
+    <p class="mb-0">
+        <strong>@item.Taken of @item.Places</strong> places taken.
+        @if (!roster.Started)
+        {
+            <span class="text-muted">Once the class has started, you can mark anyone who didn't come.</span>
+        }
+        else if (billNoShows)
+        {
+            <span class="text-muted">Check-ins that weren't cancelled in time are billed, so marking someone as not there keeps the record straight but doesn't change their bill.</span>
+        }
+        else
+        {
+            <span class="text-muted">Anyone marked as not there isn't billed for this class.</span>
+        }
+    </p>
+</section>
+
+@if (roster.Bookings.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-people" aria-hidden="true"></i>
+        <p>Nobody has checked in to this class@(roster.Started ? "" : " yet").</p>
+    </div>
+}
+else
+{
+    <div class="table-responsive table-card">
+        <table class="table align-middle mb-0 table-stack">
+            <thead><tr><th>Student</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>
+                @foreach (var booking in roster.Bookings)
+                {
+                    <tr>
+                        <td data-label="Student"><strong lang="@booking.Student!.FullName.Language()">@booking.Student.FullName</strong></td>
+                        <td data-label="Status">
+                            @if (booking.CancelledAt != null)
+                            {
+                                <span class="status-pill status-pending">Cancelled late@(billNoShows ? ", billed" : "")</span>
+                            }
+                            else if (booking.NoShow)
+                            {
+                                <span class="status-pill status-rejected">Didn't come@(billNoShows ? ", billed" : "")</span>
+                            }
+                            else
+                            {
+                                <span class="status-pill status-active">@(roster.Started ? "There" : "Checked in")</span>
+                            }
+                            @if (booking.ChargeId != null)
+                            {
+                                <span class="text-muted small">· in the month's bill</span>
+                            }
+                        </td>
+                        <td class="text-end table-actions">
+                            @if (booking.CancelledAt == null && roster.Started && booking.ChargeId == null)
+                            {
+                                <form asp-action="SetNoShow" asp-route-organizationId="@item.Organization.Id" asp-route-bookingId="@booking.Id" method="post" class="d-inline">
+                                    <input type="hidden" name="noShow" value="@((!booking.NoShow).ToString().ToLowerInvariant())" />
+                                    <input type="hidden" name="sessionId" value="@session.Id" />
+                                    <input type="hidden" name="date" value="@item.Date.ToString("yyyy-MM-dd")" />
+                                    <button class="btn btn-sm @(booking.NoShow ? "btn-outline-success" : "btn-outline-secondary")"
+                                            aria-label="@(booking.NoShow ? $"{booking.Student.FullName} was there after all" : $"{booking.Student.FullName} didn't come")">
+                                        @(booking.NoShow ? "Was there after all" : "Didn't come")
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

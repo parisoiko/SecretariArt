@@ -84,13 +84,15 @@
 @foreach (var group in course.Groups)
 {
     int free = group.Capacity - group.Enrolments.Count;
+    // Per-class courses: places are per class (students check in), so enrolling isn't limited by them.
+    bool perClass = course.Pricing == CoursePricing.PerClass;
     <section class="group-card mb-3" id="group-@group.Id">
         <div class="group-head">
             <div>
                 <h3>Group @group.Name</h3>
                 <div class="text-muted small">
                     @(group.Teacher?.FullName ?? "No teacher yet") ·
-                    @group.Enrolments.Count of @group.Capacity places taken
+                    @(perClass ? $"{DisplayNames.Plural(group.Enrolments.Count, "student")} · {group.Capacity} places per class" : $"{group.Enrolments.Count} of {group.Capacity} places taken")
                 </div>
                 @if (overview.GroupWarnings.TryGetValue(group.Id, out string? groupWarning))
                 {
@@ -105,9 +107,12 @@
                 </form>
             </div>
         </div>
-        <div class="capacity-bar" role="img" aria-label="@group.Enrolments.Count of @group.Capacity places taken">
-            <span style="width: @(group.Capacity == 0 ? 0 : Math.Min(100, group.Enrolments.Count * 100 / group.Capacity))%"></span>
-        </div>
+        @if (!perClass)
+        {
+            <div class="capacity-bar" role="img" aria-label="@group.Enrolments.Count of @group.Capacity places taken">
+                <span style="width: @(group.Capacity == 0 ? 0 : Math.Min(100, group.Enrolments.Count * 100 / group.Capacity))%"></span>
+            </div>
+        }
 
         @if (group.Enrolments.Count > 0)
         {
@@ -133,10 +138,10 @@
 
         @* A group's own teacher can't also be one of its students. *@
         @{ var candidates = Model.StudentsNotTaking.Where(s => s.Id != group.TeacherId).ToList(); }
-        @if (free > 0 && candidates.Count > 0)
+        @if ((perClass || free > 0) && candidates.Count > 0)
         {
             <details class="add-students">
-                <summary><i class="bi bi-person-plus" aria-hidden="true"></i> Add students (@free free place@(free == 1 ? "" : "s"))</summary>
+                <summary><i class="bi bi-person-plus" aria-hidden="true"></i> Add students@(perClass ? "" : $" ({DisplayNames.Plural(free, "free place")})")</summary>
                 <form asp-action="AddStudents" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id" method="post">
                     <input type="search" class="form-control form-control-sm mb-2 student-filter" placeholder="Filter by name" aria-label="Filter students by name" />
                     <div class="check-grid students">
@@ -152,7 +157,7 @@
                 </form>
             </details>
         }
-        else if (free > 0 && group.Enrolments.Count == 0)
+        else if ((perClass || free > 0) && group.Enrolments.Count == 0)
         {
             <p class="text-muted small mb-0 mt-2">No approved students yet: share your invite code on the Members tab.</p>
         }

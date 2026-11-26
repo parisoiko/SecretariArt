@@ -230,6 +230,54 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Booking", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("BookedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("CancelledLate")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("ChargeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("NoShow")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("OrganizationId", "Date");
+
+                    b.HasIndex("SessionId", "Date", "StudentId")
+                        .IsUnique();
+
+                    b.ToTable("Bookings");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
                 {
                     b.Property<int>("Id")
@@ -241,6 +289,10 @@ namespace SecretariArt.Data.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("MonthlyPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -271,6 +323,92 @@ namespace SecretariArt.Data.Migrations
                     b.HasIndex("CourseId");
 
                     b.ToTable("BundleCourses");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Charge", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int?>("BundleId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("Classes")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("DiscountNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateOnly>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateOnly?>("Month")
+                        .HasColumnType("date");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("OrganizationId", "DueOn");
+
+                    b.HasIndex("OrganizationId", "Key")
+                        .IsUnique()
+                        .HasFilter("[Key] IS NOT NULL");
+
+                    b.ToTable("Charges");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.ClassSession", b =>
@@ -379,6 +517,15 @@ namespace SecretariArt.Data.Migrations
                     b.Property<int>("OrganizationId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("Pricing")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("RequiredFeatures")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -448,6 +595,34 @@ namespace SecretariArt.Data.Migrations
                     b.HasIndex("TeacherId");
 
                     b.ToTable("CourseTeachers");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Discount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Discounts");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
@@ -706,6 +881,137 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("OrganizationRules");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Payment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int>("ChargeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RecordedById")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChargeId");
+
+                    b.HasIndex("RecordedById");
+
+                    b.HasIndex("OrganizationId", "PaidOn");
+
+                    b.ToTable("Payments");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.PaymentSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("BillNoShows")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("CancelHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DueDay")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReminderDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("PaymentSettings");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.StudentDiscount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BundleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CourseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DiscountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("StudentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BundleId");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("DiscountId");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("OrganizationId", "StudentId");
+
+                    b.ToTable("StudentDiscounts");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.TeacherAvailability", b =>
                 {
                     b.Property<int>("Id")
@@ -792,6 +1098,25 @@ namespace SecretariArt.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Booking", b =>
+                {
+                    b.HasOne("SecretariArt.Models.ClassSession", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
                 {
                     b.HasOne("SecretariArt.Models.Organization", "Organization")
@@ -820,6 +1145,25 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Bundle");
 
                     b.Navigation("Course");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Charge", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.ClassSession", b =>
@@ -898,6 +1242,17 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Discount", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
@@ -993,6 +1348,67 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Payment", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Charge", "Charge")
+                        .WithMany("Payments")
+                        .HasForeignKey("ChargeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "RecordedBy")
+                        .WithMany()
+                        .HasForeignKey("RecordedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Charge");
+
+                    b.Navigation("RecordedBy");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.PaymentSettings", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithOne()
+                        .HasForeignKey("SecretariArt.Models.PaymentSettings", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.StudentDiscount", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Bundle", "Bundle")
+                        .WithMany()
+                        .HasForeignKey("BundleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SecretariArt.Models.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SecretariArt.Models.Discount", "Discount")
+                        .WithMany()
+                        .HasForeignKey("DiscountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Bundle");
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Discount");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.TeacherAvailability", b =>
                 {
                     b.HasOne("SecretariArt.Models.Organization", "Organization")
@@ -1020,6 +1436,11 @@ namespace SecretariArt.Data.Migrations
             modelBuilder.Entity("SecretariArt.Models.Bundle", b =>
                 {
                     b.Navigation("Courses");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.Charge", b =>
+                {
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Course", b =>

@@ -1,0 +1,13 @@
+@model CheckInsViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Check-ins · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("payments")" />
+<partial name="_PaymentsNav" model="@("check-ins")" />
+
+<p class="text-muted">Classes of per-class courses, from last week to two weeks ahead, with how many students checked in.
+   Open one to see who, and to mark anyone who didn't come. Their teachers can do the same from their Schedule.</p>
+
+<partial name="_ClassDates" model="@(new ClassDatesModel(Model.Classes, c => Url.Action("Roster", "Payments", new { organizationId = organization.Id, sessionId = c.Session.Id, date = c.Date.ToString("yyyy-MM-dd") })!))" />

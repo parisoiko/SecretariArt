@@ -23,6 +23,8 @@ public class SecretariArtFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        // Billing runs when pages ask for it; the hourly worker would share the one SQLite connection at random times.
+        builder.UseSetting("Billing:RunInBackground", "false");
         builder.ConfigureServices(services =>
         {
             // Since EF Core 8 the provider is configured through IDbContextOptionsConfiguration<T>: remove it too,

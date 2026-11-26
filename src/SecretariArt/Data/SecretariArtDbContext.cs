@@ -20,6 +20,12 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
     public DbSet<ClassSession> ClassSessions => Set<ClassSession>();
     public DbSet<TeacherAvailability> TeacherAvailability => Set<TeacherAvailability>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<PaymentSettings> PaymentSettings => Set<PaymentSettings>();
+    public DbSet<Discount> Discounts => Set<Discount>();
+    public DbSet<StudentDiscount> StudentDiscounts => Set<StudentDiscount>();
+    public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<Charge> Charges => Set<Charge>();
+    public DbSet<Payment> Payments => Set<Payment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -72,6 +78,78 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
 
         ConfigureAdministration(builder);
         ConfigureScheduling(builder);
+        ConfigurePayments(builder);
+    }
+
+    // Milestone 4. Money is decimal(10,2). Charges and payments are never deleted with a student or course: the books
+    // must still add up after someone leaves (Restrict, and the services don't delete them).
+    private static void ConfigurePayments(ModelBuilder builder)
+    {
+        builder.Entity<Course>().Property(c => c.Pricing).HasConversion<string>().HasMaxLength(20);
+        builder.Entity<Course>().Property(c => c.Price).HasPrecision(10, 2);
+        builder.Entity<Bundle>().Property(b => b.MonthlyPrice).HasPrecision(10, 2);
+
+        builder.Entity<PaymentSettings>(settings =>
+        {
+            settings.HasIndex(s => s.OrganizationId).IsUnique();
+            settings.HasOne(s => s.Organization).WithOne().HasForeignKey<PaymentSettings>(s => s.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Discount>(discount =>
+        {
+            discount.Property(d => d.Name).HasMaxLength(100);
+            discount.Property(d => d.Percent).HasPrecision(5, 2);
+            discount.HasIndex(d => new { d.OrganizationId, d.Name }).IsUnique();
+            discount.HasOne(d => d.Organization).WithMany().HasForeignKey(d => d.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<StudentDiscount>(discount =>
+        {
+            discount.Property(d => d.Percent).HasPrecision(5, 2);
+            discount.Property(d => d.Reason).HasMaxLength(200);
+            discount.HasIndex(d => new { d.OrganizationId, d.StudentId });
+            discount.HasOne(d => d.Student).WithMany().HasForeignKey(d => d.StudentId).OnDelete(DeleteBehavior.Restrict);
+            discount.HasOne(d => d.Discount).WithMany().HasForeignKey(d => d.DiscountId).OnDelete(DeleteBehavior.Restrict);
+            discount.HasOne(d => d.Course).WithMany().HasForeignKey(d => d.CourseId).OnDelete(DeleteBehavior.Restrict);
+            discount.HasOne(d => d.Bundle).WithMany().HasForeignKey(d => d.BundleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Booking>(booking =>
+        {
+            booking.HasIndex(b => new { b.SessionId, b.Date, b.StudentId }).IsUnique();
+            booking.HasIndex(b => new { b.OrganizationId, b.Date });
+            booking.HasOne(b => b.Session).WithMany().HasForeignKey(b => b.SessionId).OnDelete(DeleteBehavior.Restrict);
+            booking.HasOne(b => b.Student).WithMany().HasForeignKey(b => b.StudentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Charge>(charge =>
+        {
+            charge.Property(c => c.Kind).HasConversion<string>().HasMaxLength(20);
+            charge.Property(c => c.Key).HasMaxLength(100);
+            charge.Property(c => c.Description).HasMaxLength(200);
+            charge.Property(c => c.DiscountNote).HasMaxLength(300);
+            charge.Property(c => c.CancelReason).HasMaxLength(RejectionReasons.MaxLength);
+            charge.Property(c => c.BaseAmount).HasPrecision(10, 2);
+            charge.Property(c => c.DiscountAmount).HasPrecision(10, 2);
+            charge.Property(c => c.Amount).HasPrecision(10, 2);
+            charge.HasIndex(c => new { c.OrganizationId, c.Key }).IsUnique().HasFilter("[Key] IS NOT NULL");
+            charge.HasIndex(c => new { c.OrganizationId, c.DueOn });
+            charge.HasIndex(c => c.StudentId);
+            charge.HasOne(c => c.Organization).WithMany().HasForeignKey(c => c.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+            charge.HasOne(c => c.Student).WithMany().HasForeignKey(c => c.StudentId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Payment>(payment =>
+        {
+            payment.Property(p => p.Amount).HasPrecision(10, 2);
+            payment.Property(p => p.Method).HasConversion<string>().HasMaxLength(20);
+            payment.Property(p => p.Reference).HasMaxLength(100);
+            payment.HasIndex(p => new { p.OrganizationId, p.PaidOn });
+            payment.HasOne(p => p.Charge).WithMany(c => c.Payments).HasForeignKey(p => p.ChargeId).OnDelete(DeleteBehavior.Restrict);
+            payment.HasOne(p => p.RecordedBy).WithMany().HasForeignKey(p => p.RecordedById).OnDelete(DeleteBehavior.SetNull);
+        });
     }
 
     // Milestone 3. Sessions go with their group (the services delete them explicitly and notify the people involved);

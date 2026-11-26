@@ -63,7 +63,7 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         {
             return TeachesGroup(name, group);
         }
-        if (group.Enrolments.Count >= group.Capacity)
+        if (!group.PlacesPerClass && group.Enrolments.Count >= group.Capacity)
         {
             return Full(group);
         }
@@ -133,7 +133,7 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         }
 
         int free = group.Capacity - group.Enrolments.Count;
-        if (toAdd.Count > free)
+        if (!group.PlacesPerClass && toAdd.Count > free)
         {
             return ServiceResult.Fail($"Group {group.Name} has {DisplayNames.Plural(free, "free place")}; " +
                                       $"you chose {toAdd.Count} new students. Raise its places or choose fewer.");
@@ -184,7 +184,7 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
             }
 
             // Never the group the student teaches: they can't be on both sides of the same class.
-            var open = course.Groups.Where(g => g.Enrolments.Count < g.Capacity && g.TeacherId != studentId).ToList();
+            var open = course.Groups.Where(g => (g.PlacesPerClass || g.Enrolments.Count < g.Capacity) && g.TeacherId != studentId).ToList();
             if (open.Count == 0)
             {
                 noRoom.Add(course.Name);

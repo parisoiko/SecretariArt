@@ -64,6 +64,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IScheduleService, ScheduleService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
+        services.AddScoped<IBookingService, BookingService>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IPaymentSetupService, PaymentSetupService>();
+        services.AddHostedService<BillingWorker>();
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserMemberships, CurrentUserMemberships>();
@@ -71,6 +75,9 @@ public static class ServiceCollectionExtensions
         services.AddControllersWithViews(options =>
         {
             options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+
+            // Money and percentages accept a decimal comma ("12,50"), as people in Greece type them.
+            options.ModelBinderProviders.Insert(0, new DecimalModelBinderProvider());
 
             // The framework's wording when a value can't be read at all ("The value '2.5' is not valid for
             // Capacity (people)."). The numeric fields on our forms are whole numbers.

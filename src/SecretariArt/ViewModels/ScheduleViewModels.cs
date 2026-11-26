@@ -142,6 +142,13 @@ public class PersonalScheduleViewModel
     // Organisation id → colour, the same on every tab.
     public IReadOnlyDictionary<int, int> Tones { get; init; } = new Dictionary<int, int>();
     public IReadOnlyList<Organization> Organizations { get; init; } = [];
+
+    // Per-class courses (milestone 4): classes the student can check in to, or the teacher's classes with check-ins.
+    // Each tab shows only when there is something in it.
+    public IReadOnlyList<ClassDate> Classes { get; init; } = [];
+    public bool CanBook { get; init; }
+    public bool HasCheckIns { get; init; }
+    public IReadOnlyDictionary<int, PaymentSettings> CancelRules { get; init; } = new Dictionary<int, PaymentSettings>();
 }
 
 public class AvailabilityFormViewModel

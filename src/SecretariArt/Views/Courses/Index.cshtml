@@ -53,7 +53,14 @@ else
                 </div>
                 <div class="course-stats">
                     <div><strong>@course.Groups.Count</strong> <span>group@(course.Groups.Count == 1 ? "" : "s")</span></div>
-                    <div><strong>@overview.Enrolled/@overview.Places</strong> <span>places taken</span></div>
+                    @if (course.Pricing == CoursePricing.PerClass)
+                    {
+                        <div><strong>@overview.Enrolled</strong> <span>student@(overview.Enrolled == 1 ? "" : "s")</span></div>
+                    }
+                    else
+                    {
+                        <div><strong>@overview.Enrolled/@overview.Places</strong> <span>places taken</span></div>
+                    }
                 </div>
             </a>
         }

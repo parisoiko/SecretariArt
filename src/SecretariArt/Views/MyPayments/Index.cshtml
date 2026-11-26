@@ -1,0 +1,128 @@
+@model MyPaymentsViewModel
+@{
+    ViewData["Title"] = "Payments";
+    decimal overdue = Model.Statements.Sum(s => s.Overdue);
+    decimal owed = Model.Statements.Sum(s => s.Owed);
+}
+
+<header class="page-header">
+    <h1>Payments</h1>
+    <p>What you owe and have paid, in every organisation. Pay at the office or by bank transfer, as your organisation asks;
+       they record it here.</p>
+</header>
+
+@if (overdue > 0)
+{
+    <div class="alert alert-danger" role="alert">
+        <i class="bi bi-exclamation-octagon me-2" aria-hidden="true"></i>
+        <strong>@DisplayNames.Money(overdue) is overdue.</strong> Please pay it as soon as you can, or talk to the office.
+    </div>
+}
+
+@if (Model.Statements.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-wallet2" aria-hidden="true"></i>
+        <p>Nothing here yet. When you're enrolled in a course with a price, its charges appear here.</p>
+    </div>
+}
+
+@foreach (var statement in Model.Statements)
+{
+    var open = statement.Charges.Where(c => c.Balance > 0).ToList();
+    var done = statement.Charges.Where(c => c.Balance == 0).ToList();
+    <section class="mb-5" aria-labelledby="org-@statement.Organization.Id">
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+            <h2 class="section-title mb-0" id="org-@statement.Organization.Id" lang="@statement.Organization.Name.Language()">@statement.Organization.Name</h2>
+            <div class="money-cards compact">
+                <div class="money-card"><span>To pay</span><strong>@DisplayNames.Money(statement.Owed)</strong></div>
+                @if (statement.Overdue > 0)
+                {
+                    <div class="money-card alert-tone"><span>Overdue</span><strong>@DisplayNames.Money(statement.Overdue)</strong></div>
+                }
+            </div>
+        </div>
+
+        @if (open.Count == 0)
+        {
+            <p class="text-muted"><i class="bi bi-check-circle text-success" aria-hidden="true"></i> Nothing to pay.</p>
+        }
+        else
+        {
+            <ul class="due-list">
+                @foreach (var charge in open)
+                {
+                    var state = PaymentDisplay.State(charge, Model.Today);
+                    <li class="@(charge.IsOverdue(Model.Today) ? "overdue" : "")">
+                        <div>
+                            <strong>@charge.Description</strong>
+                            @if (charge.DiscountAmount > 0)
+                            {
+                                <div class="text-muted small">@DisplayNames.Money(charge.BaseAmount), less @DisplayNames.Money(charge.DiscountAmount) (@charge.DiscountNote)</div>
+                            }
+                            @if (charge.Paid > 0)
+                            {
+                                <div class="text-muted small">@DisplayNames.Money(charge.Paid) of @DisplayNames.Money(charge.Amount) paid</div>
+                            }
+                        </div>
+                        <div class="text-end">
+                            <div class="money fw-semibold">@DisplayNames.Money(charge.Balance)</div>
+                            <span class="status-pill @state.Css">@state.Text</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (statement.SoFar.Count > 0)
+        {
+            <p class="small text-muted mt-2">
+                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                So far this month:
+                @string.Join("; ", statement.SoFar.Select(s => $"{s.Course.Name}, {DisplayNames.Plural(s.Classes, "class", "classes")}, {DisplayNames.Money(s.Amount)}")).
+                It's billed after the month ends.
+            </p>
+        }
+
+        @if (statement.Discounts.Count > 0)
+        {
+            <p class="small text-muted">
+                <i class="bi bi-percent" aria-hidden="true"></i>
+                Your discounts: @string.Join("; ", statement.Discounts.Select(d => $"{d.Label} {d.EffectivePercent:0.##}% on {d.Course?.Name ?? d.Bundle?.Name ?? "everything"}")).
+            </p>
+        }
+
+        @if (done.Count > 0)
+        {
+            <details class="history mt-3">
+                <summary>Paid and waived (@done.Count)</summary>
+                <ul class="due-list muted">
+                    @foreach (var charge in done)
+                    {
+                        <li>
+                            <div>
+                                @charge.Description
+                                <div class="text-muted small">
+                                    @if (charge.CancelledAt != null)
+                                    {
+                                        <text>Waived: @charge.CancelReason</text>
+                                    }
+                                    else
+                                    {
+                                        @string.Join(", ", charge.Payments.OrderBy(p => p.PaidOn).Select(p => $"{DisplayNames.Money(p.Amount)} on {DisplayNames.ShortDate(p.PaidOn)} ({p.Method.Display().ToLowerInvariant()})"))
+                                    }
+                                </div>
+                            </div>
+                            <div class="text-end money">@DisplayNames.Money(charge.Amount)</div>
+                        </li>
+                    }
+                </ul>
+            </details>
+        }
+    </section>
+}
+
+@if (owed == 0 && Model.Statements.Count > 0 && Model.Statements.All(s => s.Charges.Count == 0))
+{
+    <p class="text-muted small">Your courses have no charges yet. Monthly fees appear at the start of each month; classes paid per class after each month ends.</p>
+}

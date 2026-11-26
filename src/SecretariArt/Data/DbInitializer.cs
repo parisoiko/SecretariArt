@@ -55,6 +55,12 @@ public static class DbInitializer
             {
                 await SeedDemoScheduleAsync(db);
             }
+
+            // Milestone 4: prices, discounts, payment settings and last month's books, once the timetable exists.
+            if (!await db.PaymentSettings.AnyAsync() && await db.ClassSessions.AnyAsync())
+            {
+                await SeedDemoPaymentsAsync(db);
+            }
         }
     }
 
@@ -355,6 +361,142 @@ public static class DbInitializer
             Available("petros@demo.secretariart.app", DayOfWeek.Tuesday, 9, 14);
             Available("petros@demo.secretariart.app", DayOfWeek.Wednesday, 9, 13);
             Available("petros@demo.secretariart.app", DayOfWeek.Thursday, 13, 18);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Development only. Athens: monthly fees and the Year 1 bundle price, two named discounts, and last month's
+    // bundle fees (paid, part paid and unpaid, so the books show overdue amounts). Patras: ballet by the month and
+    // Contemporary per class, billing no-shows; Dimitra checked in to Contemporary last month (once without coming)
+    // and for next Wednesday. This month's fees are made by billing itself, the first time anyone opens the books.
+    private static async Task SeedDemoPaymentsAsync(SecretariArtDbContext db)
+    {
+        DateTime now = DateTime.UtcNow;
+        DateOnly today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, Services.SchoolTime.Zone).DateTime);
+        DateOnly lastMonth = new DateOnly(today.Year, today.Month, 1).AddMonths(-1);
+        var organizations = await db.Organizations.Where(o => o.InviteCode == "ATHENS26" || o.InviteCode == "PATRAS26").ToListAsync();
+        var courses = await db.Courses.ToListAsync();
+        var people = await db.Users.Where(u => u.Email!.EndsWith("@demo.secretariart.app")).ToDictionaryAsync(u => u.Email!.Split('@')[0]);
+        var admins = await db.Memberships.Where(m => m.Role == MembershipRole.Admin).ToListAsync();
+
+        void Price(Organization organization, string course, CoursePricing pricing, decimal price)
+        {
+            if (courses.FirstOrDefault(c => c.OrganizationId == organization.Id && c.Name == course) is Course found)
+            {
+                found.Pricing = pricing;
+                found.Price = price;
+            }
+        }
+
+        if (organizations.FirstOrDefault(o => o.InviteCode == "ATHENS26") is Organization athens)
+        {
+            db.PaymentSettings.Add(new PaymentSettings { OrganizationId = athens.Id, DueDay = 5, ReminderDays = 3, UpdatedAt = now });
+            Price(athens, "Acting I", CoursePricing.Monthly, 90);
+            Price(athens, "Voice and speech", CoursePricing.Monthly, 40);
+            Price(athens, "Movement for actors", CoursePricing.Monthly, 50);
+            Price(athens, "Theatre history", CoursePricing.Monthly, 35);
+            Price(athens, "Stage combat", CoursePricing.Monthly, 45);
+
+            var siblings = new Discount { OrganizationId = athens.Id, Name = "Siblings", Percent = 25 };
+            var scholarship = new Discount { OrganizationId = athens.Id, Name = "Scholarship", Percent = 50 };
+            db.Discounts.AddRange(siblings, scholarship);
+
+            Bundle? year1 = await db.Bundles.FirstOrDefaultAsync(b => b.OrganizationId == athens.Id && b.Name == "Year 1 – Acting");
+            string? eleni = admins.FirstOrDefault(m => m.OrganizationId == athens.Id)?.UserId;
+            if (year1 != null)
+            {
+                year1.MonthlyPrice = 180;
+                if (people.TryGetValue("maria", out ApplicationUser? maria))
+                {
+                    db.StudentDiscounts.Add(new StudentDiscount { OrganizationId = athens.Id, StudentId = maria.Id, Discount = scholarship, CreatedAt = now });
+                }
+                if (people.TryGetValue("yannis", out ApplicationUser? yannis))
+                {
+                    db.StudentDiscounts.Add(new StudentDiscount
+                    {
+                        OrganizationId = athens.Id, StudentId = yannis.Id, Percent = 10, Reason = "Early enrolment", BundleId = year1.Id, CreatedAt = now,
+                    });
+                }
+
+                // Last month's fees for the five Year 1 students, in every state the books can show.
+                (string Name, decimal Amount, string? Note, (decimal Amount, PaymentMethod Method, int Day)? Paid)[] fees =
+                [
+                    ("giorgos", 180, null, (180, PaymentMethod.Cash, 3)),
+                    ("maria", 90, "Scholarship 50%", (90, PaymentMethod.BankTransfer, 4)),
+                    ("yannis", 162, "Early enrolment 10%", (100, PaymentMethod.Card, 6)),
+                    ("eleftheria", 180, null, null),
+                    ("christos", 180, null, (180, PaymentMethod.Card, 5)),
+                ];
+                foreach (var fee in fees)
+                {
+                    if (!people.TryGetValue(fee.Name, out ApplicationUser? student))
+                    {
+                        continue;
+                    }
+                    var charge = new Charge
+                    {
+                        OrganizationId = athens.Id, StudentId = student.Id, Kind = ChargeKind.Bundle, Key = $"B:{year1.Id}:{student.Id}:{lastMonth:yyyy-MM}",
+                        BundleId = year1.Id, Month = lastMonth, Description = $"{year1.Name} (bundle), {DisplayNames.MonthName(lastMonth)}",
+                        BaseAmount = 180, DiscountAmount = 180 - fee.Amount, DiscountNote = fee.Note, Amount = fee.Amount,
+                        DueOn = lastMonth.AddDays(4), CreatedAt = now.AddDays(-30), ReminderSentAt = now.AddDays(-33),
+                    };
+                    if (fee.Paid is var (amount, method, day))
+                    {
+                        charge.Payments.Add(new Payment
+                        {
+                            OrganizationId = athens.Id, Amount = amount, Method = method, PaidOn = lastMonth.AddDays(day - 1),
+                            RecordedById = eleni, RecordedAt = now.AddDays(-30),
+                        });
+                    }
+                    db.Charges.Add(charge);
+                }
+            }
+
+            if (people.TryGetValue("ioanna", out ApplicationUser? ioanna))
+            {
+                db.Charges.Add(new Charge
+                {
+                    OrganizationId = athens.Id, StudentId = ioanna.Id, Kind = ChargeKind.Other, Description = "Registration fee 2026–27",
+                    BaseAmount = 50, Amount = 50, DueOn = today.AddDays(2), CreatedAt = now.AddDays(-10),
+                });
+            }
+        }
+
+        if (organizations.FirstOrDefault(o => o.InviteCode == "PATRAS26") is Organization patras)
+        {
+            db.PaymentSettings.Add(new PaymentSettings
+            {
+                OrganizationId = patras.Id, DueDay = 1, ReminderDays = 2, BillNoShows = true, CancelHours = 4, UpdatedAt = now,
+            });
+            Price(patras, "Ballet for beginners", CoursePricing.Monthly, 60);
+            Price(patras, "Contemporary", CoursePricing.PerClass, 15);
+
+            ClassSession? contemporary = await db.ClassSessions.Include(s => s.Group)
+                .FirstOrDefaultAsync(s => s.OrganizationId == patras.Id && s.Group!.Course!.Name == "Contemporary");
+            if (contemporary != null && people.TryGetValue("dimitra", out ApplicationUser? dimitra))
+            {
+                if (!await db.Enrolments.AnyAsync(e => e.StudentId == dimitra.Id && e.CourseId == contemporary.Group!.CourseId))
+                {
+                    db.Enrolments.Add(new Enrolment
+                    {
+                        OrganizationId = patras.Id, StudentId = dimitra.Id, CourseId = contemporary.Group!.CourseId, GroupId = contemporary.GroupId,
+                        EnrolledAt = now.AddDays(-40),
+                    });
+                }
+
+                DateOnly NextDay(DateOnly from, DayOfWeek day) => from.AddDays(((int)day - (int)from.DayOfWeek + 7) % 7);
+                DateOnly first = NextDay(lastMonth, contemporary.Day);
+                DateOnly upcoming = NextDay(today.AddDays(1), contemporary.Day);
+                foreach ((DateOnly date, bool noShow) in new[] { (first, false), (first.AddDays(7), true), (upcoming, false) })
+                {
+                    db.Bookings.Add(new Booking
+                    {
+                        OrganizationId = patras.Id, SessionId = contemporary.Id, Date = date, StudentId = dimitra.Id,
+                        BookedAt = now.AddDays(-35), NoShow = noShow,
+                    });
+                }
+            }
         }
 
         await db.SaveChangesAsync();

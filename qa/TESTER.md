@@ -165,6 +165,77 @@ The rules the editor enforces (check every one):
 - Every week grid is readable at 1280×800 (overlapping classes sit side by side) and at 390×844 (list per day).
   Hover titles and the list both say the time, room and any clash.
 
+### Milestone 4: payments (rounds 15–19)
+Each course is paid one of two ways, set on the admin's **Payments → Prices** page:
+- a **monthly fee**: billed automatically for every enrolled student, each month of the term. Nobody records
+  anything;
+- **per class attended**: students **check in** to each dated class beforehand (Schedule → **Check in to
+  classes**, up to 4 weeks ahead). Check-ins are limited by the group's places (or the room, if smaller), but
+  enrolment in such a course isn't. After each month ends, the classes are billed as one charge.
+
+A **bundle** can have its own monthly price, which replaces its courses' prices for students who take the bundle.
+Discounts are **named** (Settings & discounts, e.g. "Siblings 25%") or **one-off** (on the student's page, with a
+reason). Either applies to everything or to one course or bundle, and several apply one after the other.
+
+**Payments → Settings** has the due day (fees due on that day of their month; per-class charges on that day of the
+next month; a charge made after its due day gets a week), reminder days, and the per-class rule **bill students who
+check in but don't come**, with a free-cancellation window in hours.
+
+New pages:
+- the admin's **Payments** tab (`/admin/{orgId}/payments`): **Books** (totals, charges filtered To pay / Overdue /
+  Paid or waived / All, or one line per student), a **student's page** (charges with payments, Record payment,
+  Change, Waive, discounts, one-off charges), **Check-ins**, **Prices**, **Settings & discounts**;
+- the student's **Payments** page (`/payments`): what they owe in every organisation, overdue in red, history;
+- **Check in to classes** (students) and **Who's coming** (teachers) on the personal Schedule, plus a class's
+  check-in list, where the teacher or an admin marks anyone who didn't come (after the class has started).
+
+Time: billing runs when the books or a Payments page open, and every hour in the background (which also sends
+reminders). You can't move the clock, so per-class charges for this month only show as "so far this month". The
+due-day and reminder rules can be checked on charges made today. Term dates matter: months outside an
+organisation's term aren't billed, so look at the term dates you set in round 12 first.
+
+15. **Prices and settings.** As each admin, price every course (mix monthly and per class across organisations;
+    an atelier is a good per-class case), give at least one bundle a monthly price, set the due day and reminders,
+    and turn on billing no-shows (with a window) in one organisation only. Check:
+    - a priced course with no amount is refused and what you typed is kept;
+    - opening the Books makes this month's fees for every enrolled student, with the right amount and due date;
+    - changing a price updates this month's unpaid fees (the message says how many) but not paid ones;
+    - a bundle price replaces its courses' fees for bundle students, and clearing it brings them back.
+16. **Discounts.** Create named discounts; give students a named one, a one-off one on one course, and both on the
+    same student. Check the amounts (25% then 10% is 32.5% off), the note on each charge, and that removing a
+    discount updates this month's unpaid fee.
+17. **The desk.** As admins, record payments: full, part (twice to settle), by each method, with a reference.
+    Check:
+    - paying more than is owed, or a future date, is refused;
+    - a payment can be removed and the charge is owed again;
+    - waiving needs a reason, which the student sees;
+    - changing a charge's amount can't go below what's paid;
+    - a one-off charge (e.g. registration fee) reaches the student.
+
+    Each action notifies the student (bell). Students see it on `/payments`, overdue in red with words.
+18. **Checking in.** As students of per-class courses:
+    - check in to several classes and cancel some, on both sides of the free-cancellation window (in the
+      organisation that bills no-shows the message says it will still be billed);
+    - fill a class to its places: the next student sees "Full" and is refused;
+    - check the "so far this month" line on `/payments`.
+
+    As the teacher (Who's coming) and the admin (Check-ins), open a class that has started and mark someone as
+    not there, then back. A class that hasn't started yet can't be marked.
+19. **Cross-checks.** `multi-n` students with charges in two organisations see both on `/payments`, each with its
+    own totals. A student who leaves a course keeps the charges already made. A per-class group can take more
+    students than its places, and the course page says "places per class".
+
+**Milestone 4 probes:**
+- An admin of A opens `/admin/{A}/payments/students/{studentOfB}` and posts a payment to a charge of B: "not
+  found", nothing changed.
+- Students, teachers and pending members open `/admin/{orgId}/payments`: denied. An admin-only account opening
+  `/payments` is sent Home.
+- A student checks in to a class of a course they're not enrolled in, or to a date that isn't a class day
+  (tampered form): refused.
+- Amounts: 0, negative, 0.001, 100000.01, commas ("12,50") and Greek input in money fields.
+- Double-submitting Record payment doesn't record it twice past the balance.
+- Every new page at 390×844: the record-payment and change forms open in place and are usable.
+
 ## Probes (in every round, wherever they apply)
 - **Access control:** a student or teacher opens `/admin/{orgId}/members`; an admin of A opens
   `/admin/{orgIdOfB}/members` and tries to approve someone there; a non-platform user opens
@@ -206,11 +277,17 @@ Add these sections:
 
 Note the probes that changed data and how you put it back.
 
+## Ledger for milestone 4
+Add these sections:
+- **Prices** per organisation: each course's way of paying and amount, and bundle prices.
+- **Payment settings** and **named discounts** per organisation; **discounts given** to students.
+- **Charges and payments** you recorded (student, what, amount, paid, method), waived charges, one-off charges.
+- **Check-ins**: student, class, date, cancelled (in time or late), marked as not there.
+
 ## Retesting
-Before starting new rounds, retest the open findings in the latest run report, including the two notes from
-the M6 retest, and mark each one fixed or still open.
+Before starting new rounds, retest the open findings in the latest run report and mark each one fixed or still
+open. N1 (long emails breaking mid-word on a phone) is known and left as it is.
 
 ## Future milestones (to extend as features land)
-Payments (price plans, discounts, charges with due dates, payment books) and automatic timetable generation don't
-exist yet. The **Payments** page is still a placeholder. Don't go looking for them. If you find a link to
+Automatic timetable generation doesn't exist yet. Don't go looking for it. If you find a link to
 something unfinished, note it in the report.

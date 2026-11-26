@@ -33,6 +33,11 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
 - The timetable is weekly (`ClassSession`: group, room, day, start–end, every week of the term). All clash rules live in
   `ScheduleChecker` (problems refuse, warnings save with a note); enrolment and group-teacher changes use
   `TimetableClashes`. Session changes notify the group's teacher and students (`INotificationService`).
+- Payments: a course is paid monthly (billed automatically) or per class attended (students check in to dated classes,
+  `BookingService`; places are per class, enrolment isn't capped). `BillingService.EnsureChargesAsync` makes what's due
+  (idempotent via `Charge.Key`) when pages open and hourly in `BillingWorker` (`Billing:RunInBackground=false` in tests).
+  Charges keep their amounts; only this month's unpaid fees follow price or discount changes. Times and dates are the
+  school's (`SchoolTime`, Europe/Athens). SQLite can't sum or compare decimals: do money maths in memory.
 
 ## Conventions
 - Registrations live in `Extensions/ServiceCollectionExtensions.cs`; `Program.cs` stays short.
@@ -51,9 +56,11 @@ Giorgos (student Athens), Katerina (pending student Athens), Sofia (pending orga
 rules, classrooms, courses with groups, the "Year 1 – Acting" bundle and enrolments for Athens (plus teacher Petros and
 students Maria, Yannis, Eleftheria, Christos, Ioanna, Stavros) and Patras (teacher Elena). Milestone 3 adds a weekly
 timetable for both, Dimitra's and Petros' availability in Athens, and notifications; Dimitra's Tuesday 18:00 classes
-clash on purpose (Athens teaching vs Patras ballet). See `Data/DbInitializer.cs`.
+clash on purpose (Athens teaching vs Patras ballet). Milestone 4 adds prices (Athens monthly, Year 1 bundle €180;
+Patras ballet monthly, Contemporary per class, billing no-shows), Siblings/Scholarship discounts, last month's Athens
+bundle fees in every state (Eleftheria overdue) and Dimitra's Contemporary check-ins. See `Data/DbInitializer.cs`.
 
 ## Roadmap
 Plan with milestones: 1 accounts & organisations (done) · 2 administration (rules, classrooms, courses/groups/bundles,
 enrolments; done) · 3 schedules by hand (availability, editor with conflict checks, calendars, notifications; done) ·
-4 payments · 5 automatic generation with Google OR-Tools CP-SAT · 6 polish.
+4 payments (prices, check-ins, discounts, charges, books; done) · 5 automatic generation with Google OR-Tools CP-SAT · 6 polish.

@@ -1,0 +1,27 @@
+@model string
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    (string Key, string Action, string Icon, string Label)[] pages =
+    [
+        ("books", "Index", "bi-journal-text", "Books"),
+        ("check-ins", "CheckIns", "bi-clipboard-check", "Check-ins"),
+        ("prices", "Prices", "bi-tag", "Prices"),
+        ("settings", "Settings", "bi-gear", "Settings & discounts"),
+    ];
+}
+<nav aria-label="Payments pages" class="mb-4">
+    <ul class="nav nav-pills sub-pills">
+        @foreach (var item in pages)
+        {
+            bool active = item.Key == Model;
+            <li class="nav-item">
+                <a class="nav-link @(active ? "active" : "")" aria-current="@(active ? "page" : null)"
+                   asp-controller="Payments" asp-action="@item.Action" asp-route-organizationId="@organization.Id"><i class="bi @item.Icon" aria-hidden="true"></i> @item.Label</a>
+            </li>
+        }
+    </ul>
+</nav>
+<script>
+    // On a phone the row scrolls sideways; bring the current page into view, like the main tabs (QA, P17).
+    document.querySelector('.sub-pills .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+</script>

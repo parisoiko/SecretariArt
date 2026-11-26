@@ -346,3 +346,71 @@ a.week-block:hover, a.week-block:focus-visible { color: var(--sa-ink); box-shado
 .notification-list li.unread { border-left: 4px solid var(--sa-amber); background: #fffaf0; font-weight: 500; }
 .notification-meta { color: var(--sa-muted); font-size: 0.85rem; white-space: nowrap; }
 .notification-meta a { margin-left: 0.5rem; }
+
+/* ---- Payments (milestone 4) ---- */
+.sub-pills { gap: 0.25rem; flex-wrap: nowrap; overflow-x: auto; }
+.sub-pills .nav-link { color: var(--sa-muted); white-space: nowrap; padding: 0.35rem 0.8rem; }
+.sub-pills .nav-link.active { background: var(--sa-violet-100); color: var(--sa-violet); font-weight: 600; }
+
+.money, .money-card strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.money-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; }
+.money-cards.compact { display: flex; gap: 0.5rem; }
+.money-card { background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); padding: 0.75rem 1rem; }
+.money-card span, .money-card small { display: block; color: var(--sa-muted); font-size: 0.8rem; }
+.money-card strong { display: block; font-size: 1.4rem; color: var(--sa-ink); }
+.money-cards.compact .money-card { padding: 0.4rem 0.8rem; }
+.money-cards.compact .money-card strong { font-size: 1.1rem; }
+.money-card.alert-tone { border-color: #e9b4b4; background: #fdf3f3; }
+.money-card.alert-tone strong { color: #9b2c2c; }
+.status-waived { background: #eceaf0; color: var(--sa-muted); }
+tr.waived td:not(.table-actions), .charge-card.waived h3 { text-decoration: line-through; color: var(--sa-muted); }
+
+/* A small form that opens in place (record a payment, change a charge). */
+.inline-form { display: inline-block; position: relative; }
+.inline-form > summary { list-style: none; }
+.inline-form > summary::-webkit-details-marker { display: none; }
+.inline-form-body {
+    position: absolute; right: 0; z-index: 20; width: 16rem; margin-top: 0.35rem; padding: 0.9rem;
+    background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); box-shadow: 0 10px 28px rgba(31, 26, 46, 0.14);
+}
+.charge-actions .inline-form-body { right: auto; left: 0; }
+
+.charge-list { display: grid; gap: 0.75rem; }
+.charge-card { background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); padding: 1rem 1.1rem; }
+.charge-card.overdue { border-left: 4px solid #c0392b; }
+.charge-card h3 { font-family: inherit; font-size: 1rem; font-weight: 600; margin: 0 0 0.15rem; }
+.charge-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.charge-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.payment-list { list-style: none; padding: 0; margin: 0.6rem 0 0; font-size: 0.92rem; }
+.payment-list li { margin-top: 0.2rem; }
+
+.price-input { max-width: 15rem; }
+
+/* Dated classes: checking in (students), who's coming (teachers, admins). */
+.class-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.class-row {
+    display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1rem; color: inherit; text-decoration: none;
+    background: var(--sa-card); border: 1px solid var(--sa-line); border-left: 4px solid var(--tone-line, var(--sa-violet-600)); border-radius: var(--sa-radius);
+}
+a.class-row:hover { box-shadow: 0 6px 16px rgba(31, 26, 46, 0.08); color: inherit; }
+.class-row.booked { background: var(--tone-bg, var(--sa-violet-100)); }
+.class-row.past { opacity: 0.75; }
+.class-time { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 3.5rem; }
+.class-time span { display: block; font-weight: 400; color: var(--sa-muted); font-size: 0.85rem; }
+.class-what { flex: 1; min-width: 0; }
+.class-action { text-align: right; flex-shrink: 0; }
+
+.due-list { list-style: none; padding: 0; margin: 0; background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); }
+.due-list li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; border-top: 1px solid var(--sa-line); }
+.due-list li:first-child { border-top: 0; }
+.due-list li.overdue { border-left: 4px solid #c0392b; }
+.history summary { cursor: pointer; color: var(--sa-violet-600); font-weight: 500; margin-bottom: 0.5rem; }
+
+@media (max-width: 575.98px) {
+    .inline-form, .inline-form > summary { display: block; }
+    .inline-form-body { position: static; width: auto; box-shadow: none; }
+    .charge-head { flex-direction: column; gap: 0.35rem; }
+    .charge-head .text-end { text-align: left !important; }
+    .class-row { flex-wrap: wrap; gap: 0.5rem 1rem; }
+    .class-action { width: 100%; text-align: left; display: flex; align-items: center; gap: 0.75rem; }
+}

@@ -1,0 +1,36 @@
+@model ClassDatesModel
+@inject TimeProvider Clock
+@{
+    var now = Clock.SchoolNow();
+}
+@if (Model.Classes.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+        <p>No per-class classes in these weeks. Classes of courses priced per class attended appear here.</p>
+    </div>
+}
+@foreach (var day in Model.Classes.GroupBy(c => c.Date))
+{
+    bool today = day.Key == DateOnly.FromDateTime(now);
+    <h2 class="section-title mt-4">@DisplayNames.LongDate(day.Key)@(today ? " (today)" : "")</h2>
+    <ul class="class-list">
+        @foreach (var item in day)
+        {
+            var session = item.Session;
+            bool past = item.Starts <= now;
+            <li>
+                <a class="class-row @(past ? "past" : "")" href="@Model.Link(item)">
+                    <div class="class-time">@session.Starts.ToString("HH:mm")<span>–@session.Ends.ToString("HH:mm")</span></div>
+                    <div class="class-what">
+                        <strong lang="@session.Group!.Course!.Name.Language()">@session.Group.Course.Name</strong> · group @session.Group.Name
+                        <div class="text-muted small">@session.Classroom!.Name@(session.Group.Teacher != null ? $" · {session.Group.Teacher.FullName}" : "")</div>
+                    </div>
+                    <div class="class-action">
+                        <strong>@item.Taken</strong> <span class="text-muted small">of @item.Places checked in</span>
+                    </div>
+                </a>
+            </li>
+        }
+    </ul>
+}

@@ -67,7 +67,8 @@ public static class ScheduleChecker
         {
             problems.Add($"{room.Name} doesn't have {string.Join(", ", missing.Split().Select(f => f.Display().ToLowerInvariant()))}, which {course.Name} needs.");
         }
-        if (room.Capacity < group.Enrolments.Count)
+        // Per-class courses: check-ins never exceed the room (BookingService), so only the places matter.
+        if (room.Capacity < group.Enrolments.Count && course.Pricing != CoursePricing.PerClass)
         {
             problems.Add($"{room.Name} holds {room.Capacity}, but group {group.Name} has {group.Enrolments.Count} students.");
         }

@@ -1,0 +1,117 @@
+@model PricesViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Prices · {organization.Name}";
+    var culture = System.Globalization.CultureInfo.InvariantCulture;
+    // Amounts that couldn't be read, shown back as they were typed.
+    var typed = ViewData["Typed"] as Dictionary<string, string?> ?? [];
+    CoursePricing[] options = [CoursePricing.NotSet, CoursePricing.Monthly, CoursePricing.PerClass];
+}
+
+<partial name="_AdminHeader" model="@("payments")" />
+<partial name="_PaymentsNav" model="@("prices")" />
+
+<p class="text-muted">
+    A course is paid either with a <strong>monthly fee</strong>, billed automatically each month of the term, or
+    <strong>per class attended</strong>: students check in to each class beforehand (which also keeps classes within their
+    places) and are billed for them after the month ends. A bundle can have its own monthly price, which replaces its
+    courses' prices for students who take the whole bundle.
+</p>
+
+@if (Model.Courses.Count == 0)
+{
+    <div class="empty-state small">
+        <i class="bi bi-tag" aria-hidden="true"></i>
+        <p>No courses yet. <a asp-controller="Courses" asp-action="Create" asp-route-organizationId="@organization.Id">Add a course</a>, then give it a price here.</p>
+    </div>
+}
+else
+{
+    <form method="post" novalidate>
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <h2 class="section-title">Courses</h2>
+        <div class="table-responsive table-card mb-4">
+            <table class="table align-middle mb-0 table-stack">
+                <thead><tr><th>Course</th><th>Paid</th><th>Price (€)</th></tr></thead>
+                <tbody>
+                    @for (int i = 0; i < Model.Courses.Count; i++)
+                    {
+                        var row = Model.Courses[i];
+                        <tr>
+                            <td data-label="Course">
+                                <input type="hidden" name="Courses[@i].Id" value="@row.Id" />
+                                <strong lang="@row.Name.Language()">@row.Name</strong>
+                            </td>
+                            <td data-label="Paid">
+                                <select class="form-select form-select-sm pricing-select" name="Courses[@i].Pricing" aria-label="How @row.Name is paid" data-row="@i">
+                                    @foreach (var option in options)
+                                    {
+                                        <option value="@option" selected="@(row.Pricing == option)">@option.Display()</option>
+                                    }
+                                </select>
+                            </td>
+                            <td data-label="Price (€)">
+                                <div class="input-group input-group-sm price-input">
+                                    <span class="input-group-text">€</span>
+                                    <input class="form-control" type="text" inputmode="decimal" autocomplete="off" name="Courses[@i].Price" id="price-@i"
+                                           value="@(typed.GetValueOrDefault($"course-{row.Id}") ?? row.Price?.ToString("0.00####", culture))" aria-label="Price of @row.Name" />
+                                    <span class="input-group-text price-unit" id="unit-@i">@(row.Pricing == CoursePricing.PerClass ? "a class" : "a month")</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.Bundles.Count > 0)
+        {
+            <h2 class="section-title">Bundles</h2>
+            <div class="table-responsive table-card mb-4">
+                <table class="table align-middle mb-0 table-stack">
+                    <thead><tr><th>Bundle</th><th>Monthly price (€)</th></tr></thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.Bundles.Count; i++)
+                        {
+                            var row = Model.Bundles[i];
+                            <tr>
+                                <td data-label="Bundle">
+                                    <input type="hidden" name="Bundles[@i].Id" value="@row.Id" />
+                                    <strong lang="@row.Name.Language()">@row.Name</strong>
+                                    <div class="text-muted small">@row.CourseNames</div>
+                                </td>
+                                <td data-label="Monthly price (€)">
+                                    <div class="input-group input-group-sm price-input">
+                                        <span class="input-group-text">€</span>
+                                        <input class="form-control" type="text" inputmode="decimal" autocomplete="off" name="Bundles[@i].MonthlyPrice"
+                                               value="@(typed.GetValueOrDefault($"bundle-{row.Id}") ?? row.MonthlyPrice?.ToString("0.00####", culture))" placeholder="Courses' own prices" aria-label="Monthly price of @row.Name" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <button type="submit" class="btn btn-primary">Save prices</button>
+        <p class="form-text mt-2">Unpaid fees for this month follow the new prices. Anything already paid, or from earlier months, stays as it was.</p>
+    </form>
+}
+
+@section Scripts {
+    <script>
+        // The price box says what the price is per, and is only needed once the course has a way to be paid.
+        document.querySelectorAll('.pricing-select').forEach(select => {
+            const price = document.getElementById('price-' + select.dataset.row);
+            const unit = document.getElementById('unit-' + select.dataset.row);
+            const update = () => {
+                unit.textContent = select.value === 'PerClass' ? 'a class' : 'a month';
+                price.disabled = select.value === 'NotSet';
+            };
+            select.addEventListener('change', update);
+            update();
+        });
+    </script>
+}

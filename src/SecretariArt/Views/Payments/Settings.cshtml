@@ -1,0 +1,95 @@
+@model PaymentSettingsViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Payment settings · {organization.Name}";
+}
+
+<partial name="_AdminHeader" model="@("payments")" />
+<partial name="_PaymentsNav" model="@("settings")" />
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <form method="post" class="form-card" novalidate>
+            <h2 class="section-title">Due dates and reminders</h2>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+            <div class="mb-3">
+                <label asp-for="DueDay" class="form-label"></label>
+                <input asp-for="DueDay" type="number" min="1" max="28" class="form-control w-auto" />
+                <span asp-validation-for="DueDay" class="invalid-feedback d-block"></span>
+                <div class="form-text">Monthly fees are due on this day of their month; per-class charges on this day of the next month.</div>
+            </div>
+            <div class="mb-4">
+                <label asp-for="ReminderDays" class="form-label"></label>
+                <input asp-for="ReminderDays" type="number" min="0" max="30" class="form-control w-auto" />
+                <span asp-validation-for="ReminderDays" class="invalid-feedback d-block"></span>
+                <div class="form-text">Students get a notification before a charge is due. 0: no reminders.</div>
+            </div>
+
+            <h2 class="section-title">Per-class courses</h2>
+            <div class="form-check mb-2">
+                <input asp-for="BillNoShows" class="form-check-input" />
+                <label asp-for="BillNoShows" class="form-check-label"></label>
+            </div>
+            <div class="mb-3 cancel-hours">
+                <label asp-for="CancelHours" class="form-label"></label>
+                <input asp-for="CancelHours" type="number" min="0" max="72" class="form-control w-auto" />
+                <span asp-validation-for="CancelHours" class="invalid-feedback d-block"></span>
+                <div class="form-text">Students who cancel later than this, or don't come, are billed for the class. They're told when they check in.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save settings</button>
+        </form>
+    </div>
+
+    <div class="col-lg-5">
+        <section class="form-card" aria-labelledby="named-title">
+            <h2 class="section-title" id="named-title">Discounts</h2>
+            <p class="text-muted small">Discounts you give often. Give one to a student from their page in the books; you can also give one-off discounts there.</p>
+            @if (Model.Discounts.Count == 0)
+            {
+                <p><em>None yet.</em></p>
+            }
+            else
+            {
+                <ul class="slot-list mb-3">
+                    @foreach (var discount in Model.Discounts)
+                    {
+                        <li>
+                            <span><strong>@discount.Name</strong> @discount.Percent.ToString("0.##")%</span>
+                            <form asp-action="DeleteDiscount" asp-route-organizationId="@organization.Id" asp-route-discountId="@discount.Id" method="post" class="d-inline"
+                                  data-confirm="Delete the @discount.Name discount? Students who have it lose it, and this month's unpaid fees are worked out again. Paid and earlier charges keep their amounts.">
+                                <button class="btn btn-sm btn-link text-danger p-0" aria-label="Delete @discount.Name"><i class="bi bi-x-circle" aria-hidden="true"></i> Delete</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+            <form asp-action="AddDiscount" asp-route-organizationId="@organization.Id" method="post" class="row g-2 align-items-end">
+                <div class="col-7">
+                    <label class="form-label small mb-1" for="discount-name">Name</label>
+                    <input class="form-control form-control-sm" id="discount-name" name="Name" maxlength="100" placeholder="e.g. Siblings" required />
+                </div>
+                <div class="col-5">
+                    <label class="form-label small mb-1" for="discount-percent">%</label>
+                    <input class="form-control form-control-sm" id="discount-percent" name="Percent" type="text" inputmode="decimal" autocomplete="off" required />
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-sm btn-primary">Add discount</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScripts" />
+    <script>
+        // The cancellation window only matters when no-shows are billed.
+        const bill = document.getElementById('BillNoShows');
+        const hours = document.querySelector('.cancel-hours');
+        const toggle = () => hours.hidden = !bill.checked;
+        bill.addEventListener('change', toggle);
+        toggle();
+    </script>
+}

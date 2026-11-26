@@ -1,0 +1,153 @@
+@model BooksViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Payments · {organization.Name}";
+    var books = Model.Books;
+    string here = Context.Request.Path + Context.Request.QueryString;
+    (BooksFilter Filter, string Label)[] filters =
+    [
+        (BooksFilter.Open, "To pay"), (BooksFilter.Overdue, $"Overdue ({books.OverdueCount})"), (BooksFilter.Paid, "Paid or waived"), (BooksFilter.All, "All"),
+    ];
+}
+
+<partial name="_AdminHeader" model="@("payments")" />
+<partial name="_PaymentsNav" model="@("books")" />
+
+<div class="money-cards mb-4">
+    <div class="money-card @(books.Overdue > 0 ? "alert-tone" : "")">
+        <span>Overdue</span>
+        <strong>@DisplayNames.Money(books.Overdue)</strong>
+        <small>@DisplayNames.Plural(books.OverdueCount, "charge")</small>
+    </div>
+    <div class="money-card">
+        <span>Due in the next 2 weeks</span>
+        <strong>@DisplayNames.Money(books.DueSoon)</strong>
+    </div>
+    <div class="money-card">
+        <span>Received in @DisplayNames.MonthName(books.Today.FirstOfMonth())</span>
+        <strong>@DisplayNames.Money(books.CollectedThisMonth)</strong>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="btn-group" role="group" aria-label="Show">
+        <a class="btn btn-sm @(Model.View == "charges" ? "btn-primary" : "btn-outline-primary")" aria-current="@(Model.View == "charges" ? "page" : null)"
+           asp-action="Index" asp-route-organizationId="@organization.Id" asp-route-filter="@Model.Filter" asp-route-search="@Model.Search">Charges</a>
+        <a class="btn btn-sm @(Model.View == "students" ? "btn-primary" : "btn-outline-primary")" aria-current="@(Model.View == "students" ? "page" : null)"
+           asp-action="Index" asp-route-organizationId="@organization.Id" asp-route-view="students" asp-route-search="@Model.Search">Students</a>
+    </div>
+    <form method="get" class="d-flex gap-2" role="search">
+        <input type="hidden" name="filter" value="@Model.Filter" />
+        <input type="hidden" name="view" value="@Model.View" />
+        <input type="search" name="search" value="@Model.Search" class="form-control form-control-sm" placeholder="Student or course" aria-label="Search the books" />
+        <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search" aria-hidden="true"></i><span class="visually-hidden">Search</span></button>
+    </form>
+</div>
+
+@if (Model.View == "students")
+{
+    @if (books.Students.Count == 0)
+    {
+        <div class="empty-state small">
+            <i class="bi bi-people" aria-hidden="true"></i>
+            <p>@(string.IsNullOrWhiteSpace(Model.Search) ? "No approved students yet." : $"No student matches “{Model.Search}”.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive table-card">
+            <table class="table align-middle mb-0 table-stack">
+                <thead><tr><th>Student</th><th class="text-end">To pay</th><th class="text-end">Overdue</th><th>Next due</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var row in books.Students)
+                    {
+                        <tr>
+                            <td data-label="Student">
+                                <strong lang="@row.Student.FullName.Language()">@row.Student.FullName</strong>
+                                @if (row.HasDiscount) { <span class="feature-badge ms-1">Discount</span> }
+                            </td>
+                            <td data-label="To pay" class="text-end money">@DisplayNames.Money(row.Owed)</td>
+                            <td data-label="Overdue" class="text-end money @(row.Overdue > 0 ? "text-danger fw-semibold" : "text-muted")">@(row.Overdue > 0 ? DisplayNames.Money(row.Overdue) : "–")</td>
+                            <td data-label="Next due">@(row.NextDue is DateOnly next ? DisplayNames.ShortDate(next) : "–")</td>
+                            <td class="text-end table-actions">
+                                <a class="btn btn-sm btn-outline-primary" asp-action="Student" asp-route-organizationId="@organization.Id" asp-route-studentId="@row.Student.Id">Open</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+else
+{
+    <nav aria-label="Filter charges" class="mb-3">
+        <ul class="nav nav-underline small">
+            @foreach (var option in filters)
+            {
+                bool active = option.Filter == Model.Filter;
+                <li class="nav-item">
+                    <a class="nav-link @(active ? "active" : "")" aria-current="@(active ? "page" : null)"
+                       asp-action="Index" asp-route-organizationId="@organization.Id" asp-route-filter="@option.Filter" asp-route-search="@Model.Search">@option.Label</a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+    @if (books.Charges.Count == 0)
+    {
+        <div class="empty-state small">
+            <i class="bi bi-journal-check" aria-hidden="true"></i>
+            @if (!string.IsNullOrWhiteSpace(Model.Search))
+            {
+                <p>Nothing matches “@Model.Search”. <a asp-action="Index" asp-route-organizationId="@organization.Id" asp-route-filter="@Model.Filter">Show everything</a></p>
+            }
+            else if (Model.Filter == BooksFilter.Overdue)
+            {
+                <p>Nothing is overdue.</p>
+            }
+            else if (Model.Filter == BooksFilter.Open)
+            {
+                <p>Nothing to pay right now. Charges appear here once courses have <a asp-action="Prices" asp-route-organizationId="@organization.Id">prices</a>:
+                   monthly fees at the start of each month, per-class charges after each month ends.</p>
+            }
+            else
+            {
+                <p>No charges yet.</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive table-card">
+            <table class="table align-middle mb-0 table-stack">
+                <thead><tr><th>Student</th><th>For</th><th class="text-end">Amount</th><th class="text-end">To pay</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var charge in books.Charges)
+                    {
+                        var state = PaymentDisplay.State(charge, books.Today);
+                        <tr class="@(charge.CancelledAt != null ? "waived" : "")">
+                            <td data-label="Student">
+                                <a asp-action="Student" asp-route-organizationId="@organization.Id" asp-route-studentId="@charge.StudentId"
+                                   lang="@charge.Student!.FullName.Language()">@charge.Student!.FullName</a>
+                            </td>
+                            <td data-label="For">
+                                @charge.Description
+                                @if (charge.DiscountNote != null) { <div class="text-muted small">@charge.DiscountNote</div> }
+                            </td>
+                            <td data-label="Amount" class="text-end money">@DisplayNames.Money(charge.Amount)</td>
+                            <td data-label="To pay" class="text-end money">@(charge.Balance > 0 ? DisplayNames.Money(charge.Balance) : "–")</td>
+                            <td data-label="Status"><span class="status-pill @state.Css">@state.Text</span></td>
+                            <td class="text-end table-actions">
+                                @if (charge.Balance > 0)
+                                {
+                                    <partial name="_RecordPayment" model="@(new RecordPaymentModel(charge, books.Today, here))" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}

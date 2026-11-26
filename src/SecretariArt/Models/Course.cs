@@ -16,6 +16,10 @@ public class Course
 
     public RoomFeatures RequiredFeatures { get; set; }
 
+    // Milestone 4: how it is paid for (see CoursePricing). Price is per month or per class.
+    public CoursePricing Pricing { get; set; }
+    public decimal Price { get; set; }
+
     // Teachers who can teach it. A group's teacher is chosen from them.
     public List<CourseTeacher> Teachers { get; set; } = [];
     public List<CourseGroup> Groups { get; set; } = [];
@@ -43,6 +47,9 @@ public class CourseGroup
     public string Name { get; set; } = "";
     public int Capacity { get; set; }
 
+    // Per-class courses: the places are per class (students check in to each one), so any number can enrol.
+    public bool PlacesPerClass => Course?.Pricing == CoursePricing.PerClass;
+
     public string? TeacherId { get; set; }
     public ApplicationUser? Teacher { get; set; }
 
@@ -59,6 +66,9 @@ public class Bundle
 
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+
+    // When set, a student who takes the bundle pays this each month instead of its courses' prices.
+    public decimal? MonthlyPrice { get; set; }
 
     public List<BundleCourse> Courses { get; set; } = [];
 }

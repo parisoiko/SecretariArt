@@ -69,6 +69,15 @@ public static class DisplayNames
 
     public static string Plural(int count, string noun, string plural) => $"{count} {(count == 1 ? noun : plural)}";
 
+    // Euros, the British way: "€1,234.50". One currency for now, like the time zone (SchoolTime).
+    public static string Money(decimal amount) =>
+        (amount < 0 ? "−€" : "€") + Math.Abs(amount).ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+
+    // "Thu 27 Nov", "Thursday 27 November", "November 2026".
+    public static string ShortDate(DateOnly date) => date.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+    public static string LongDate(DateOnly date) => date.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+    public static string MonthName(DateOnly month) => month.ToString("MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+
     // "1 h 30 min", "45 min", "2 h".
     public static string Minutes(int minutes) => (minutes / 60, minutes % 60) switch
     {

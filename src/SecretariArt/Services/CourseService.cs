@@ -345,7 +345,7 @@ public class CourseService(
         {
             return ServiceResult.Fail($"{course.Name} already has a group called {name}.");
         }
-        if (input.Capacity < enrolled)
+        if (input.Capacity < enrolled && course.Pricing != CoursePricing.PerClass)
         {
             return ServiceResult.Fail($"Group {name} already has {DisplayNames.Plural(enrolled, "student")}; its places can't be fewer.");
         }

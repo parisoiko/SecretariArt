@@ -4,7 +4,7 @@
         Model.CurrentController == controller && (action == null || ViewContext.RouteData.Values["action"]?.ToString() == action)
             ? "nav-link active" : "nav-link";
     // Every administration tab has its own controller; all of them belong to "Administration".
-    string[] adminControllers = ["Administration", "Rules", "Classrooms", "Courses", "Bundles", "Enrolments", "Schedule"];
+    string[] adminControllers = ["Administration", "Rules", "Classrooms", "Courses", "Bundles", "Enrolments", "Schedule", "Payments"];
     string adminCss = adminControllers.Contains(Model.CurrentController) ? "nav-link active" : "nav-link";
     string bellLabel = Model.UnreadNotifications == 0 ? "Notifications" : $"Notifications, {Model.UnreadNotifications} new";
 }
@@ -18,7 +18,7 @@
     }
     @if (Model.Roles.IsStudent)
     {
-        <li class="nav-item"><a class="@Active("Sections", "Payments")" asp-controller="Sections" asp-action="Payments"><i class="bi bi-wallet2" aria-hidden="true"></i> Payments</a></li>
+        <li class="nav-item"><a class="@Active("MyPayments")" asp-controller="MyPayments" asp-action="Index"><i class="bi bi-wallet2" aria-hidden="true"></i> Payments</a></li>
     }
     @if (Model.Roles.IsAdmin)
     {

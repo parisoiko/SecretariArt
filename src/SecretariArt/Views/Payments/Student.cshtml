@@ -1,0 +1,293 @@
+@model StatementViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var statement = Model.Statement;
+    var student = statement.Student;
+    ViewData["Title"] = $"{student.FullName} · Payments · {organization.Name}";
+    // The student page's own address, not the request's: after a refused form this page is shown at that form's POST address,
+    // and coming back there with a GET would fail (QA, P16).
+    string here = Url.Action("Student", new { organizationId = organization.Id, studentId = student.Id })!;
+    var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+    string PriceOf(Enrolment e) =>
+        statement.Bundled.TryGetValue(e.CourseId, out Bundle? bundle) ? $"in {bundle.Name} ({DisplayNames.Money(bundle.MonthlyPrice!.Value)} a month)"
+        : e.Course!.Pricing switch
+        {
+            CoursePricing.Monthly => $"{DisplayNames.Money(e.Course.Price)} a month",
+            CoursePricing.PerClass => $"{DisplayNames.Money(e.Course.Price)} a class attended",
+            _ => "no price yet",
+        };
+}
+
+<partial name="_AdminHeader" model="@("payments")" />
+
+<a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> Books</a>
+
+<section class="detail-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <h2 class="mb-1" lang="@student.FullName.Language()">@student.FullName</h2>
+            <div class="text-muted small">@student.Email@(student.PhoneNumber != null ? $" · {student.PhoneNumber}" : "")</div>
+        </div>
+        <div class="money-cards compact">
+            <div class="money-card"><span>To pay</span><strong>@DisplayNames.Money(statement.Owed)</strong></div>
+            <div class="money-card @(statement.Overdue > 0 ? "alert-tone" : "")"><span>Overdue</span><strong>@DisplayNames.Money(statement.Overdue)</strong></div>
+        </div>
+    </div>
+    <dl class="facts">
+        <div>
+            <dt>Takes</dt>
+            <dd>
+                @if (statement.Enrolments.Count == 0)
+                {
+                    <span class="text-muted">No courses at the moment</span>
+                }
+                @foreach (var enrolment in statement.Enrolments)
+                {
+                    <div><span lang="@enrolment.Course!.Name.Language()">@enrolment.Course.Name</span> <span class="text-muted small">· @PriceOf(enrolment)</span></div>
+                }
+            </dd>
+        </div>
+        @if (statement.SoFar.Count > 0)
+        {
+            <div>
+                <dt>Classes so far this month</dt>
+                <dd>
+                    @foreach (var item in statement.SoFar)
+                    {
+                        <div>@item.Course.Name: @DisplayNames.Plural(item.Classes, "class", "classes"), @DisplayNames.Money(item.Amount) <span class="text-muted small">(billed after the month ends)</span></div>
+                    }
+                </dd>
+            </div>
+        }
+    </dl>
+    <a class="small" asp-controller="Enrolments" asp-action="Student" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id">Change enrolments</a>
+</section>
+
+<h2 class="section-title">Charges</h2>
+@if (statement.Charges.Count == 0)
+{
+    <div class="empty-state small mb-4">
+        <i class="bi bi-journal" aria-hidden="true"></i>
+        <p>No charges yet. Monthly fees appear at the start of each month for courses with a price; per-class charges after each month ends.</p>
+    </div>
+}
+else
+{
+    <div class="charge-list mb-4">
+        @foreach (var charge in statement.Charges)
+        {
+            var state = PaymentDisplay.State(charge, statement.Today);
+            <article class="charge-card @(charge.CancelledAt != null ? "waived" : "") @(charge.IsOverdue(statement.Today) ? "overdue" : "")" id="charge-@charge.Id">
+                <div class="charge-head">
+                    <div>
+                        <h3>@charge.Description</h3>
+                        <div class="text-muted small">
+                            @if (charge.DiscountAmount > 0)
+                            {
+                                <text>@DisplayNames.Money(charge.BaseAmount) − @DisplayNames.Money(charge.DiscountAmount) (@charge.DiscountNote) = </text>
+                            }
+                            <strong>@DisplayNames.Money(charge.Amount)</strong>
+                            @if (charge.Amount != charge.BaseAmount - charge.DiscountAmount) { <text> (adjusted)</text> }
+                            · due @DisplayNames.LongDate(charge.DueOn)
+                        </div>
+                        @if (charge.CancelledAt != null)
+                        {
+                            <div class="small">Waived: @charge.CancelReason</div>
+                        }
+                    </div>
+                    <div class="text-end">
+                        <span class="status-pill @state.Css">@state.Text</span>
+                        @if (charge.Balance > 0 && charge.Paid > 0)
+                        {
+                            <div class="small mt-1">@DisplayNames.Money(charge.Balance) to pay</div>
+                        }
+                    </div>
+                </div>
+
+                @if (charge.Payments.Count > 0)
+                {
+                    <ul class="payment-list">
+                        @foreach (var payment in charge.Payments.OrderBy(p => p.PaidOn).ThenBy(p => p.Id))
+                        {
+                            <li>
+                                <i class="bi bi-check2-circle text-success" aria-hidden="true"></i>
+                                @DisplayNames.Money(payment.Amount) on @DisplayNames.ShortDate(payment.PaidOn), @payment.Method.Display().ToLowerInvariant()@(payment.Reference != null ? $", ref. {payment.Reference}" : "")
+                                <span class="text-muted small">· recorded by @(payment.RecordedBy?.FullName ?? "an admin")</span>
+                                <form asp-action="DeletePayment" asp-route-organizationId="@organization.Id" asp-route-paymentId="@payment.Id" asp-route-studentId="@student.Id"
+                                      method="post" class="d-inline" data-confirm="Remove the payment of @DisplayNames.Money(payment.Amount) on @DisplayNames.ShortDate(payment.PaidOn)? It will be owed again.">
+                                    <button class="btn btn-link btn-sm text-danger p-0 ms-1" aria-label="Remove the payment of @DisplayNames.Money(payment.Amount)"><i class="bi bi-x-circle" aria-hidden="true"></i></button>
+                                </form>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (charge.CancelledAt == null)
+                {
+                    <div class="charge-actions">
+                        @if (charge.Balance > 0)
+                        {
+                            <partial name="_RecordPayment" model="@(new RecordPaymentModel(charge, statement.Today, $"{here}#charge-{charge.Id}"))" />
+                        }
+                        <details class="inline-form">
+                            <summary class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil" aria-hidden="true"></i> Change</summary>
+                            <form asp-action="UpdateCharge" asp-route-organizationId="@organization.Id" asp-route-chargeId="@charge.Id" method="post" class="inline-form-body">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1" for="amount-@charge.Id">Amount (€)</label>
+                                    <input class="form-control form-control-sm" id="amount-@charge.Id" name="Amount" type="text" inputmode="decimal" autocomplete="off"
+                                           value="@charge.Amount.ToString("0.00", culture)" required />
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1" for="due-@charge.Id">Due on</label>
+                                    <input class="form-control form-control-sm" id="due-@charge.Id" name="DueOn" type="date" value="@charge.DueOn.ToString("yyyy-MM-dd")" required />
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                            </form>
+                        </details>
+                        @if (charge.Balance > 0)
+                        {
+                            bool waiveRefused = Model.FormKey == $"waive-{charge.Id}";
+                            <details class="inline-form" open="@waiveRefused">
+                                <summary class="btn btn-sm btn-outline-danger"><i class="bi bi-slash-circle" aria-hidden="true"></i> Waive</summary>
+                                <form asp-action="Waive" asp-route-organizationId="@organization.Id" asp-route-chargeId="@charge.Id" method="post" class="inline-form-body">
+                                    <p class="small mb-2">Waive the @DisplayNames.Money(charge.Balance) still owed. It stays in the books, crossed out.</p>
+                                    @if (waiveRefused)
+                                    {
+                                        <p class="text-danger small mb-2" role="alert">@Model.FormError</p>
+                                    }
+                                    <label class="form-label small mb-1" for="reason-@charge.Id">Reason (the student sees it)</label>
+                                    <input class="form-control form-control-sm mb-2" id="reason-@charge.Id" name="Reason" maxlength="@RejectionReasons.MaxLength" required value="@(waiveRefused ? Model.WaiveReason : null)"
+                                           placeholder="e.g. Missed classes through illness" />
+                                    <button type="submit" class="btn btn-sm btn-danger w-100">Waive @DisplayNames.Money(charge.Balance)</button>
+                                </form>
+                            </details>
+                        }
+                    </div>
+                }
+            </article>
+        }
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <section class="form-card h-100" aria-labelledby="discounts-title">
+            <h2 class="section-title" id="discounts-title">Discounts</h2>
+            @if (statement.Discounts.Count == 0)
+            {
+                <p class="text-muted small">None.</p>
+            }
+            else
+            {
+                <ul class="slot-list mb-3">
+                    @foreach (var discount in statement.Discounts)
+                    {
+                        <li>
+                            <span>
+                                <strong>@discount.Label</strong> @discount.EffectivePercent.ToString("0.##")%
+                                <span class="text-muted small">on @(discount.Course?.Name ?? discount.Bundle?.Name ?? "everything")</span>
+                            </span>
+                            <form asp-action="RemoveDiscount" asp-route-organizationId="@organization.Id" asp-route-studentDiscountId="@discount.Id" asp-route-studentId="@student.Id"
+                                  method="post" class="d-inline" data-confirm="Remove the @discount.Label discount from @student.FullName?">
+                                <button class="btn btn-sm btn-link text-danger p-0" aria-label="Remove the @discount.Label discount"><i class="bi bi-x-circle" aria-hidden="true"></i> Remove</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+                <p class="text-muted small">Several discounts apply one after the other: 25% then 10% is 32.5% off.</p>
+            }
+
+            <form asp-action="GiveDiscount" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post" class="discount-form">
+                @if (Model.FormKey == "discount")
+                {
+                    <div class="alert alert-danger py-2 small" role="alert">@Model.FormError</div>
+                }
+                <div class="row g-2">
+                    <div class="col-sm-6">
+                        <label class="form-label small mb-1" for="discount-kind">Discount</label>
+                        <select class="form-select form-select-sm" id="discount-kind" name="Kind" required>
+                            <option value="">Choose…</option>
+                            @foreach (var named in Model.NamedDiscounts)
+                            {
+                                <option value="@named.Id" selected="@(Model.Discount.Kind == named.Id.ToString())">@named.Name (@named.Percent.ToString("0.##")%)</option>
+                            }
+                            <option value="custom" selected="@(Model.Discount.Kind == "custom")">One-off…</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label small mb-1" for="discount-scope">On</label>
+                        <select class="form-select form-select-sm" id="discount-scope" name="Scope">
+                            <option value="all">Everything</option>
+                            @foreach (var enrolment in statement.Enrolments.Where(e => e.Course!.Pricing != CoursePricing.NotSet && !statement.Bundled.ContainsKey(e.CourseId)))
+                            {
+                                <option value="course-@enrolment.CourseId" selected="@(Model.Discount.Scope == $"course-{enrolment.CourseId}")">@enrolment.Course!.Name</option>
+                            }
+                            @foreach (var bundle in statement.Bundled.Values.DistinctBy(b => b.Id))
+                            {
+                                <option value="bundle-@bundle.Id" selected="@(Model.Discount.Scope == $"bundle-{bundle.Id}")">@bundle.Name (bundle)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-4 custom-only">
+                        <label class="form-label small mb-1" for="discount-percent">%</label>
+                        <input class="form-control form-control-sm" id="discount-percent" name="Percent" type="text" inputmode="decimal" autocomplete="off" value="@(ViewData.ModelState["Percent"]?.AttemptedValue ?? Model.Discount.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <div class="col-8 custom-only">
+                        <label class="form-label small mb-1" for="discount-reason">Reason</label>
+                        <input class="form-control form-control-sm" id="discount-reason" name="Reason" maxlength="200" value="@Model.Discount.Reason" placeholder="e.g. Teacher's child" />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary mt-2">Give discount</button>
+                @if (Model.NamedDiscounts.Count == 0)
+                {
+                    <p class="text-muted small mt-2 mb-0">Discounts you give often (siblings, scholarships) can be named on
+                        <a asp-action="Settings" asp-route-organizationId="@organization.Id">Settings &amp; discounts</a>.</p>
+                }
+            </form>
+        </section>
+    </div>
+    <div class="col-lg-6">
+        <section class="form-card h-100" aria-labelledby="charge-title">
+            <h2 class="section-title" id="charge-title">Add a one-off charge</h2>
+            <p class="text-muted small">E.g. a registration fee, materials or an exam fee. The student is told.</p>
+            <form asp-action="AddCharge" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post">
+                @if (Model.FormKey == "charge" && !string.IsNullOrEmpty(Model.FormError))
+                {
+                    <div class="alert alert-danger py-2 small" role="alert">@Model.FormError</div>
+                }
+                <div class="mb-2">
+                    <label asp-for="NewCharge.Description" class="form-label small mb-1"></label>
+                    <input asp-for="NewCharge.Description" class="form-control form-control-sm" placeholder="e.g. Registration fee 2026–27" />
+                    <span asp-validation-for="NewCharge.Description" class="invalid-feedback d-block"></span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label asp-for="NewCharge.Amount" class="form-label small mb-1"></label>
+                        <input asp-for="NewCharge.Amount" class="form-control form-control-sm" type="text" inputmode="decimal" autocomplete="off" />
+                        <span asp-validation-for="NewCharge.Amount" class="invalid-feedback d-block"></span>
+                    </div>
+                    <div class="col-6">
+                        <label asp-for="NewCharge.DueOn" class="form-label small mb-1"></label>
+                        <input asp-for="NewCharge.DueOn" class="form-control form-control-sm" type="date" />
+                        <span asp-validation-for="NewCharge.DueOn" class="invalid-feedback d-block"></span>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary mt-2">Add charge</button>
+            </form>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // The percentage and reason are for a one-off discount only.
+        const kind = document.getElementById('discount-kind');
+        const toggle = () => document.querySelectorAll('.custom-only').forEach(el => {
+            el.hidden = kind.value !== 'custom';
+            el.querySelector('input').required = kind.value === 'custom';
+        });
+        kind.addEventListener('change', toggle);
+        toggle();
+    </script>
+}
