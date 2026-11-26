@@ -40,7 +40,8 @@ public interface ICourseService
     Task<ServiceResult> DeleteBundleAsync(int organizationId, int bundleId);
 }
 
-public class CourseService(SecretariArtDbContext db, IRulesService rulesService, IMembershipService memberships) : ICourseService
+public class CourseService(
+    SecretariArtDbContext db, IRulesService rulesService, IMembershipService memberships, INotificationService notifications) : ICourseService
 {
     // ---- Courses ----
 
@@ -56,6 +57,8 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
         Course? course = await CoursesWithDetails(organizationId)
             .Include(c => c.Groups).ThenInclude(g => g.Enrolments).ThenInclude(e => e.Student)
             .Include(c => c.Groups).ThenInclude(g => g.Enrolments).ThenInclude(e => e.Bundle)
+            // For the delete confirmations: how many weekly classes would come off the timetable (QA, S5).
+            .Include(c => c.Groups).ThenInclude(g => g.Sessions)
             .FirstOrDefaultAsync(c => c.Id == courseId);
         return course == null ? null : Overview(course, await WarningContextAsync(organizationId));
     }
@@ -100,10 +103,24 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
             orphaned++;
         }
 
+        // Sessions already in the timetable keep their times; a new length applies when each is moved.
+        int oldLength = course.SessionMinutes;
         Apply(course, input);
+        // Classes whose length now differs from the course's (QA, S3: putting the length back must count none).
+        int stale = 0;
+        if (oldLength != course.SessionMinutes)
+        {
+            var sessions = await db.ClassSessions.Where(s => s.Group!.CourseId == courseId).Select(s => new { s.Starts, s.Ends }).ToListAsync();
+            stale = sessions.Count(s => (int)(s.Ends - s.Starts).TotalMinutes != course.SessionMinutes);
+        }
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"{course.Name} saved." +
-            (orphaned > 0 ? $" {orphaned} group{(orphaned == 1 ? " has" : "s have")} no teacher now: choose one on the course page." : ""));
+            (orphaned > 0 ? $" {orphaned} group{(orphaned == 1 ? " has" : "s have")} no teacher now: choose one on the course page." : "") +
+            (stale > 0
+                ? stale == 1
+                    ? $" 1 class in the timetable doesn't last {DisplayNames.Minutes(course.SessionMinutes)} yet: it's flagged on the Schedule tab until you move it."
+                    : $" {stale} classes in the timetable don't last {DisplayNames.Minutes(course.SessionMinutes)} yet: they're flagged on the Schedule tab until you move them."
+                : ""));
     }
 
     // Removes the course with its groups and its students' places in them; the confirmation says how many.
@@ -117,12 +134,20 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
         }
 
         var enrolments = await db.Enrolments.Where(e => e.CourseId == courseId).ToListAsync();
+        var sessions = await db.ClassSessions.Where(s => s.Group!.CourseId == courseId).ToListAsync();
+        if (sessions.Count > 0)
+        {
+            var people = enrolments.Select(e => e.StudentId).Concat(course.Groups.Where(g => g.TeacherId != null).Select(g => g.TeacherId!));
+            notifications.Add(people, organizationId, $"{await OrganizationNameAsync(organizationId)}: {course.Name} has been cancelled; its classes are off the timetable.", "/schedule");
+        }
+        db.ClassSessions.RemoveRange(sessions);
         db.Enrolments.RemoveRange(enrolments);
         db.CourseGroups.RemoveRange(course.Groups);
         db.Courses.Remove(course);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"{course.Name} deleted" +
-            (enrolments.Count > 0 ? $", with its {DisplayNames.Plural(course.Groups.Count, "group")} and {DisplayNames.Plural(enrolments.Count, "enrolment")}." : "."));
+            (enrolments.Count > 0 ? $", with its {DisplayNames.Plural(course.Groups.Count, "group")} and {DisplayNames.Plural(enrolments.Count, "enrolment")}" : "") +
+            (sessions.Count > 0 ? $"; {DisplayNames.Plural(sessions.Count, "class", "classes")} came off the timetable and the people concerned have been told." : "."));
     }
 
     // ---- Groups ----
@@ -174,7 +199,29 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
             return ServiceResult.Fail("That teacher is enrolled as a student in this group. Remove them from it first, or choose another teacher.");
         }
 
+        // Sessions follow the group's teacher, so a new teacher must be free at the group's class times.
+        string? previousTeacher = group.TeacherId;
+        string? newTeacher = string.IsNullOrEmpty(input.TeacherId) ? null : input.TeacherId;
+        bool teacherChanges = newTeacher != previousTeacher;
+        if (teacherChanges && newTeacher != null && await TimetableClashes.ForTeacherAsync(db, newTeacher, group) is string clash)
+        {
+            return ServiceResult.Fail($"That teacher already teaches {clash}, when this group meets. Choose another teacher, or move the classes on the Schedule tab.");
+        }
+
         Apply(group, input);
+        if (teacherChanges && await db.ClassSessions.AnyAsync(s => s.GroupId == groupId))
+        {
+            string organization = await OrganizationNameAsync(organizationId);
+            string title = $"{group.Course!.Name} (group {group.Name})";
+            if (newTeacher != null)
+            {
+                notifications.Add([newTeacher], organizationId, $"{organization}: you now teach {title}. It's in your Schedule.", "/schedule");
+            }
+            if (previousTeacher != null)
+            {
+                notifications.Add([previousTeacher], organizationId, $"{organization}: you no longer teach {title}.", "/schedule");
+            }
+        }
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"Group {group.Name} saved.");
     }
@@ -189,11 +236,20 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
         }
 
         int enrolled = group.Enrolments.Count;
+        var sessions = await db.ClassSessions.Where(s => s.GroupId == groupId).ToListAsync();
+        if (sessions.Count > 0)
+        {
+            var people = group.Enrolments.Select(e => e.StudentId).Concat(group.TeacherId == null ? [] : [group.TeacherId]);
+            notifications.Add(people, organizationId,
+                $"{await OrganizationNameAsync(organizationId)}: group {group.Name} of {group.Course!.Name} has been closed; its classes are off the timetable.", "/schedule");
+        }
+        db.ClassSessions.RemoveRange(sessions);
         db.Enrolments.RemoveRange(group.Enrolments);
         db.CourseGroups.Remove(group);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"Group {group.Name} of {group.Course!.Name} deleted" +
-            (enrolled > 0 ? $"; its {DisplayNames.Plural(enrolled, "student")} are no longer enrolled in the course." : "."));
+            (enrolled > 0 ? $"; {(enrolled == 1 ? "its 1 student is" : $"its {enrolled} students are")} no longer enrolled in the course" : "") +
+            (sessions.Count > 0 ? $"; {DisplayNames.Plural(sessions.Count, "class", "classes")} came off the timetable and the people concerned have been told." : "."));
     }
 
     // ---- Bundles ----
@@ -404,6 +460,9 @@ public class CourseService(SecretariArtDbContext db, IRulesService rulesService,
         }
     }
 
+
+    private async Task<string> OrganizationNameAsync(int organizationId) =>
+        (await db.Organizations.AsNoTracking().FirstAsync(o => o.Id == organizationId)).Name;
 
     private static readonly ServiceResult CourseNotFound = ServiceResult.Fail("We couldn't find that course.");
     private static readonly ServiceResult GroupNotFound = ServiceResult.Fail("We couldn't find that group.");

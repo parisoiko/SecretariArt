@@ -17,6 +17,9 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
     public DbSet<Bundle> Bundles => Set<Bundle>();
     public DbSet<BundleCourse> BundleCourses => Set<BundleCourse>();
     public DbSet<Enrolment> Enrolments => Set<Enrolment>();
+    public DbSet<ClassSession> ClassSessions => Set<ClassSession>();
+    public DbSet<TeacherAvailability> TeacherAvailability => Set<TeacherAvailability>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -68,6 +71,43 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         });
 
         ConfigureAdministration(builder);
+        ConfigureScheduling(builder);
+    }
+
+    // Milestone 3. Sessions go with their group (the services delete them explicitly and notify the people involved);
+    // a classroom with sessions can't be deleted.
+    private static void ConfigureScheduling(ModelBuilder builder)
+    {
+        builder.Entity<ClassSession>(session =>
+        {
+            session.Property(s => s.Day).HasConversion<string>().HasMaxLength(10);
+            session.HasIndex(s => new { s.OrganizationId, s.Day });
+            session.HasOne(s => s.Group).WithMany(g => g.Sessions).HasForeignKey(s => s.GroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+            session.HasOne(s => s.Classroom).WithMany().HasForeignKey(s => s.ClassroomId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<TeacherAvailability>(availability =>
+        {
+            availability.Property(a => a.Day).HasConversion<string>().HasMaxLength(10);
+            availability.HasIndex(a => new { a.TeacherId, a.OrganizationId });
+            availability.HasOne(a => a.Organization).WithMany().HasForeignKey(a => a.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            availability.HasOne(a => a.Teacher).WithMany().HasForeignKey(a => a.TeacherId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Notification>(notification =>
+        {
+            notification.Property(n => n.Text).HasMaxLength(500);
+            notification.Property(n => n.Url).HasMaxLength(300);
+            notification.HasIndex(n => new { n.UserId, n.ReadAt });
+            notification.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            notification.HasOne(n => n.Organization).WithMany().HasForeignKey(n => n.OrganizationId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
     }
 
     // Milestone 2. Deletes are Restrict by default: the services remove dependent rows themselves and say so, so

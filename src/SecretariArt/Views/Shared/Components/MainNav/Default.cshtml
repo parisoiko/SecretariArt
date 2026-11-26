@@ -3,14 +3,18 @@
     string Active(string controller, string? action = null) =>
         Model.CurrentController == controller && (action == null || ViewContext.RouteData.Values["action"]?.ToString() == action)
             ? "nav-link active" : "nav-link";
+    // Every administration tab has its own controller; all of them belong to "Administration".
+    string[] adminControllers = ["Administration", "Rules", "Classrooms", "Courses", "Bundles", "Enrolments", "Schedule"];
+    string adminCss = adminControllers.Contains(Model.CurrentController) ? "nav-link active" : "nav-link";
+    string bellLabel = Model.UnreadNotifications == 0 ? "Notifications" : $"Notifications, {Model.UnreadNotifications} new";
 }
 <ul class="navbar-nav ms-auto">
     <li class="nav-item"><a class="@Active("Home")" asp-controller="Home" asp-action="Index"><i class="bi bi-house" aria-hidden="true"></i> Home</a></li>
-    @* Schedule and Payments are personal (a timetable, payment deadlines): an admin-only account has neither yet;
-       its schedule and payment tools will live under Administration. *@
+    @* Schedule and Payments are personal (a timetable, payment deadlines): an admin-only account has neither;
+       its schedule tools live under Administration. *@
     @if (Model.Roles.IsTeacher || Model.Roles.IsStudent)
     {
-        <li class="nav-item"><a class="@Active("Sections", "Schedule")" asp-controller="Sections" asp-action="Schedule"><i class="bi bi-calendar3" aria-hidden="true"></i> Schedule</a></li>
+        <li class="nav-item"><a class="@Active("MySchedule")" asp-controller="MySchedule" asp-action="Index"><i class="bi bi-calendar3" aria-hidden="true"></i> Schedule</a></li>
     }
     @if (Model.Roles.IsStudent)
     {
@@ -18,10 +22,25 @@
     }
     @if (Model.Roles.IsAdmin)
     {
-        <li class="nav-item"><a class="@Active("Administration")" asp-controller="Administration" asp-action="Index"><i class="bi bi-sliders" aria-hidden="true"></i> Administration</a></li>
+        <li class="nav-item"><a class="@adminCss" asp-controller="Administration" asp-action="Index"><i class="bi bi-sliders" aria-hidden="true"></i> Administration</a></li>
     }
     @if (Model.IsPlatformAdmin)
     {
         <li class="nav-item"><a class="@Active("Platform")" asp-controller="Platform" asp-action="Organizations"><i class="bi bi-shield-check" aria-hidden="true"></i> Platform</a></li>
+    }
+    @* Notifications go to teachers and students; anyone else would see a bell that never rings (QA, S10). Shown
+       anyway if something is unread, e.g. for someone who has since left their last class. *@
+    @if (Model.Roles.IsTeacher || Model.Roles.IsStudent || Model.UnreadNotifications > 0)
+    {
+        <li class="nav-item">
+            <a class="@Active("Notifications") bell-link" asp-controller="Notifications" asp-action="Index" aria-label="@bellLabel" title="@bellLabel">
+                <i class="bi @(Model.UnreadNotifications > 0 ? "bi-bell-fill" : "bi-bell")" aria-hidden="true"></i>
+                <span class="d-md-none">Notifications</span>
+                @if (Model.UnreadNotifications > 0)
+                {
+                    <span class="bell-count" aria-hidden="true">@(Model.UnreadNotifications > 99 ? "99+" : Model.UnreadNotifications)</span>
+                }
+            </a>
+        </li>
     }
 </ul>

@@ -225,10 +225,12 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         Assert.Contains("href=\"/admin\"", home);
         Assert.DoesNotContain("href=\"/schedule\"", home);
         Assert.DoesNotContain("href=\"/payments\"", home);
+        Assert.DoesNotContain("bell-link", home); // no notifications ever come to an admin-only account (QA, S10)
 
         // Typing the address leads Home rather than to an empty personal page.
         HttpResponseMessage nikosSchedule = await nikos.GetAsync("/schedule");
         Assert.Contains("Hello, Nikos", await nikosSchedule.Content.ReadAsStringAsync());
+        Assert.Contains("Hello, Nikos", await nikos.GetStringAsync("/notifications"));
     }
 
     [Fact]
@@ -291,8 +293,9 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         Assert.DoesNotContain("href=\"/admin\"", home);
 
         string schedule = await dimitra.GetStringAsync("/schedule");
-        Assert.Contains("My classes", schedule);
-        Assert.Contains("Teaching", schedule);
+        Assert.Contains("My week", schedule);
         Assert.Contains("Availability", schedule);
+        // She teaches in Athens and studies in Patras: the demo timetable makes two of her classes clash.
+        Assert.Contains("Clashes with Ballet for beginners at Patras Dance Studio", schedule);
     }
 }

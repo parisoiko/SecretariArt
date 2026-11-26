@@ -4,17 +4,10 @@ using SecretariArt.Services;
 
 namespace SecretariArt.Controllers;
 
-// Schedule and Payments: the sections exist (so navigation and roles are in place); their content comes in later milestones.
-// Both are personal, so someone without the matching role (e.g. an admin-only account) is sent Home, like the navigation.
+// Payments: the section exists (so navigation and roles are in place); its content comes in milestone 4.
+// It is personal, so someone without the student role (e.g. an admin-only account) is sent Home, like the navigation.
 public class SectionsController(ICurrentUserMemberships currentMemberships) : Controller
 {
-    [HttpGet("schedule")]
-    public async Task<IActionResult> Schedule()
-    {
-        UserRoles roles = await currentMemberships.GetRolesAsync();
-        return roles.IsTeacher || roles.IsStudent ? View(roles) : RedirectToAction("Index", "Home");
-    }
-
     [HttpGet("payments")]
     public async Task<IActionResult> Payments()
     {

@@ -88,6 +88,83 @@ already have, as each one's own admin, and make the data fit the kind of school 
 - At 390×844 the tab row scrolls sideways with the current tab in view. Tables stack into cards; chips and
   buttons stay usable.
 
+### Milestone 3: schedules by hand (rounds 10–14)
+The timetable is **weekly**: each class repeats every week of the organisation's term. New pages:
+- the admin's **Schedule** tab (`/admin/{orgId}/schedule`): a week grid, the groups with "x of y a week", an
+  **Add a class** form, **Suggest times** and **Needs attention**;
+- the personal **Schedule** (`/schedule`) with **My week** (all your classes in every organisation) and, for
+  teachers, **Availability**;
+- the **bell** in the navigation and `/notifications`.
+
+The rules the editor enforces (check every one):
+- **Refused** (nothing saved, the reason is shown):
+  - outside the Rules: a day not taught, before the day starts or ending after it ends, not on the start-time
+    step;
+  - a room without the features the course needs, or smaller than the students already enrolled;
+  - a room already booked, including the changeover minutes from Rules;
+  - the same group twice at once;
+  - a teacher teaching two classes at once, here or at another organisation (but not if the two organisations'
+    term dates don't overlap);
+  - a student with two classes at once in this organisation.
+- **Saved with a note:**
+  - no availability posted, or outside the teacher's availability;
+  - over the daily teaching-hours limit;
+  - room smaller than the group's places;
+  - students with a class at another organisation then;
+  - more classes than the course's sessions per week;
+  - a class whose length no longer matches its course.
+
+10. **Availability.** As each teacher (`teacher-n`, `multi-n`), post weekly availability for every organisation
+    they teach at. Check:
+    - touching or overlapping times on the same day are joined into one;
+    - an end before the start is refused;
+    - times outside the organisation's teaching hours are saved with a note;
+    - removing a time asks first and says what goes;
+    - you can't post for an organisation where you're only a student (the form isn't offered there; a tampered
+      organisation id is refused).
+11. **Build the timetables.** As each organisation's admin, place every group's weekly classes:
+    - use **Suggest times** for some groups and **Use** a suggestion;
+    - type the rest into **Add a class**;
+    - aim for "x of x a week" for every group, using several rooms and days.
+
+    Record every class in the ledger.
+12. **Try to break it.** For each refused case in the list above, try it on purpose and check the message names
+    the clash (room, teacher, group or students). For each note, check it's saved and shown under
+    **Needs attention** and on the class itself.
+
+    Cross-organisation cases: `multi-1` (teacher in A, student in B) and teachers at two organisations.
+    - Put a class for B at a time `multi-1` teaches in A: B's admin sees a note.
+    - Try to give two organisations' groups the same teacher at the same time: refused.
+    - Then set term dates so the two organisations' terms don't overlap, and check the second case is allowed.
+13. **Changes around the timetable.**
+    - Move classes (edit page: day, time, room) and remove one; the teacher and students get a notification each
+      time (check the bell count, then `/notifications`, which marks them read).
+    - Enrol a student in a group whose classes clash with their other classes: refused. Through a bundle, a
+      non-clashing group is chosen, or the course is listed as clashing.
+    - Give a group a new teacher who's busy at its times: refused.
+    - Delete a classroom that's in the timetable: refused.
+    - Delete a group or a course with classes: they come off the timetable and people are told.
+    - Change a course's length or tighten the Rules: the existing classes are flagged.
+14. **Personal calendars.**
+    - As students, teachers and `multi-n`, open **My week**. Classes from every organisation appear, coloured by
+      organisation (with a key), and clashes are marked in red with words and listed at the top.
+    - Check an admin-only account has no Schedule link and `/schedule` sends them Home.
+    - At 390×844 the week becomes a list per day.
+
+**Milestone 3 probes:**
+- An admin of A opens or posts to `/admin/{A}/schedule/{sessionOfB}/edit` and `/delete`. Expected: "not found",
+  nothing changed.
+- Teachers, students, pending members and signed-out visitors open `/admin/{orgId}/schedule`. Expected: denied,
+  or sign-in for the visitor.
+- A suggestion that has become invalid (someone else took the slot meanwhile; use two browser tabs): **Use**
+  is refused with the reason, not saved.
+- Times at the very edges: a class ending exactly at the day's end (allowed), one starting exactly at the
+  changeover boundary (allowed).
+- The notifications page shows only your own notifications. Each change produces one notification per person,
+  not duplicates.
+- Every week grid is readable at 1280×800 (overlapping classes sit side by side) and at 390×844 (list per day).
+  Hover titles and the list both say the time, room and any clash.
+
 ## Probes (in every round, wherever they apply)
 - **Access control:** a student or teacher opens `/admin/{orgId}/members`; an admin of A opens
   `/admin/{orgIdOfB}/members` and tries to approve someone there; a non-platform user opens
@@ -121,11 +198,19 @@ Add these sections to `qa/reports/ledger.md`:
 
 Keep the counts at the end up to date.
 
+## Ledger for milestone 3
+Add these sections:
+- **Availability**: teacher, organisation, day and times.
+- **Timetable**: per organisation, each class's course, group, day, time, room and teacher.
+- **Term dates** you set for the cross-organisation checks.
+
+Note the probes that changed data and how you put it back.
+
 ## Retesting
-Before starting new rounds, retest the open findings in the latest run report (N6–N9 from the milestone 1 run
-included) and mark each one fixed or still open.
+Before starting new rounds, retest the open findings in the latest run report, including the two notes from
+the M6 retest, and mark each one fixed or still open.
 
 ## Future milestones (to extend as features land)
-Availability, schedules, calendars and payment books don't exist yet. When these pages appear, rounds for them
-will be added here. Until then, don't go looking for them. If you find a link to something unfinished, note it in
-the report.
+Payments (price plans, discounts, charges with due dates, payment books) and automatic timetable generation don't
+exist yet. The **Payments** page is still a placeholder. Don't go looking for them. If you find a link to
+something unfinished, note it in the report.

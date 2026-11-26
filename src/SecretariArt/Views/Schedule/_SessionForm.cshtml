@@ -1,0 +1,56 @@
+@model SessionFormViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    bool editing = Model.SessionId != null;
+    var days = Model.Rules.TeachingDays.Days().ToList();
+    if (Model.Day is DayOfWeek chosen && !days.Contains(chosen)) { days.Add(chosen); }
+}
+<form method="post" novalidate asp-antiforgery="true"
+      action="@(editing ? Url.Action("Edit", new { organizationId = organization.Id, sessionId = Model.SessionId }) : Url.Action("Create", new { organizationId = organization.Id }))">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger small"></div>
+    @if (!editing)
+    {
+        <div class="mb-2">
+            <label asp-for="GroupId" class="form-label"></label>
+            <select asp-for="GroupId" class="form-select">
+                <option value="">Choose…</option>
+                @foreach (var group in Model.Groups)
+                {
+                    <option value="@group.Id">@group.Course!.Name · @group.Name (@DisplayNames.Minutes(group.Course.SessionMinutes))</option>
+                }
+            </select>
+            <span asp-validation-for="GroupId" class="invalid-feedback d-block"></span>
+        </div>
+    }
+    <div class="row g-2 mb-2">
+        <div class="col-6">
+            <label asp-for="Day" class="form-label"></label>
+            <select asp-for="Day" class="form-select">
+                <option value="">Choose…</option>
+                @foreach (var day in days)
+                {
+                    <option value="@day">@day</option>
+                }
+            </select>
+            <span asp-validation-for="Day" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="col-6">
+            <label asp-for="Starts" class="form-label"></label>
+            <input asp-for="Starts" type="time" asp-format="{0:HH:mm}" class="form-control" />
+            <span asp-validation-for="Starts" class="invalid-feedback d-block"></span>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label asp-for="ClassroomId" class="form-label"></label>
+        <select asp-for="ClassroomId" class="form-select">
+            <option value="">Choose…</option>
+            @foreach (var room in Model.Rooms)
+            {
+                <option value="@room.Id">@room.Name (@room.Capacity)</option>
+            }
+        </select>
+        <span asp-validation-for="ClassroomId" class="invalid-feedback d-block"></span>
+    </div>
+    <p class="form-text">The class lasts as long as its course's sessions. Clashes are checked before anything is saved.</p>
+    <button type="submit" class="btn btn-primary">@(editing ? "Move class" : "Add class")</button>
+</form>

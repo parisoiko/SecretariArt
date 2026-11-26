@@ -67,6 +67,10 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         {
             return Full(group);
         }
+        if (await TimetableClashes.ForStudentAsync(db, organizationId, studentId, group) is string clash)
+        {
+            return ServiceResult.Fail($"Group {group.Name} of {group.Course!.Name} meets at the same time as {name}'s {clash}. Choose another group, or move one of the classes on the Schedule tab.");
+        }
 
         if (current != null)
         {
@@ -107,7 +111,27 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         }
 
         var alreadyTaking = (await db.Enrolments.Where(e => e.CourseId == group.CourseId).Select(e => e.StudentId).ToListAsync()).ToHashSet();
-        var toAdd = students.Where(s => !alreadyTaking.Contains(s.Id)).ToList();
+        var newcomers = students.Where(s => !alreadyTaking.Contains(s.Id)).ToList();
+
+        // Students whose own classes overlap this group's are left out and named, rather than refusing everyone.
+        var toAdd = new List<ApplicationUser>();
+        var clashing = new List<string>();
+        foreach (ApplicationUser student in newcomers)
+        {
+            if (await TimetableClashes.ForStudentAsync(db, organizationId, student.Id, group) == null)
+            {
+                toAdd.Add(student);
+            }
+            else
+            {
+                clashing.Add(student.FullName);
+            }
+        }
+        if (toAdd.Count == 0 && clashing.Count > 0)
+        {
+            return ServiceResult.Fail($"Not added: group {group.Name}'s classes clash with the timetable of {string.Join(", ", clashing)}.");
+        }
+
         int free = group.Capacity - group.Enrolments.Count;
         if (toAdd.Count > free)
         {
@@ -121,9 +145,10 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         }
         await db.SaveChangesAsync();
 
-        int skipped = students.Count - toAdd.Count;
+        int skipped = students.Count - newcomers.Count;
         return ServiceResult.Ok($"{DisplayNames.Plural(toAdd.Count, "student")} added to {group.Course!.Name}, group {group.Name}." +
-            (skipped > 0 ? $" {DisplayNames.Plural(skipped, "student")} already took the course and stayed in their group." : ""));
+            (skipped > 0 ? $" {DisplayNames.Plural(skipped, "student")} already took the course and stayed in their group." : "") +
+            (clashing.Count > 0 ? $" Not added because of a timetable clash: {string.Join(", ", clashing)}." : ""));
     }
 
     // Enrols the student in every course of the bundle they don't already take. For each course it uses the group
@@ -147,6 +172,8 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         var enrolled = new List<string>();
         var already = new List<string>();
         var noRoom = new List<string>();
+        var clashes = new List<string>();
+        var chosenGroups = new List<int>();
 
         foreach (Course course in bundle.Courses.Select(l => l.Course!).OrderBy(c => c.Name))
         {
@@ -158,14 +185,32 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
 
             // Never the group the student teaches: they can't be on both sides of the same class.
             var open = course.Groups.Where(g => g.Enrolments.Count < g.Capacity && g.TeacherId != studentId).ToList();
-            CourseGroup? group =
-                open.FirstOrDefault(g => string.Equals(g.Name, preferredGroup?.Trim(), StringComparison.OrdinalIgnoreCase))
-                ?? open.OrderByDescending(g => g.Capacity - g.Enrolments.Count).ThenBy(g => g.Name).FirstOrDefault();
-            if (group == null)
+            if (open.Count == 0)
             {
                 noRoom.Add(course.Name);
                 continue;
             }
+
+            // Preferred group first, then the emptiest; the first one whose classes don't clash with the student's
+            // timetable (including the groups chosen so far in this bundle).
+            var candidates = open
+                .OrderBy(g => string.Equals(g.Name, preferredGroup?.Trim(), StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenByDescending(g => g.Capacity - g.Enrolments.Count).ThenBy(g => g.Name);
+            CourseGroup? group = null;
+            foreach (CourseGroup candidate in candidates)
+            {
+                if (await TimetableClashes.ForStudentAsync(db, organizationId, studentId, candidate, chosenGroups) == null)
+                {
+                    group = candidate;
+                    break;
+                }
+            }
+            if (group == null)
+            {
+                clashes.Add(course.Name);
+                continue;
+            }
+            chosenGroups.Add(group.Id);
 
             Enrolment enrolment = NewEnrolment(organizationId, studentId, group, bundle.Id);
             db.Enrolments.Add(enrolment);
@@ -175,11 +220,11 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
 
         if (enrolled.Count == 0)
         {
-            return ServiceResult.Fail($"{name} wasn't enrolled in anything from {bundle.Name}." + Details(already, noRoom));
+            return ServiceResult.Fail($"{name} wasn't enrolled in anything from {bundle.Name}." + Details(already, noRoom, clashes));
         }
 
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"{name} enrolled through {bundle.Name} in {string.Join(", ", enrolled)}." + Details(already, noRoom));
+        return ServiceResult.Ok($"{name} enrolled through {bundle.Name} in {string.Join(", ", enrolled)}." + Details(already, noRoom, clashes));
     }
 
     public async Task<ServiceResult> UnenrolAsync(int organizationId, int enrolmentId)
@@ -196,9 +241,10 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         return ServiceResult.Ok($"{enrolment.Student!.FullName} is no longer enrolled in {enrolment.Course!.Name} (group {enrolment.Group!.Name}).");
     }
 
-    private static string Details(List<string> already, List<string> noRoom) =>
+    private static string Details(List<string> already, List<string> noRoom, List<string> clashes) =>
         (already.Count > 0 ? $" Already taking: {string.Join(", ", already)}." : "") +
-        (noRoom.Count > 0 ? $" No group with free places: {string.Join(", ", noRoom)}." : "");
+        (noRoom.Count > 0 ? $" No group with free places: {string.Join(", ", noRoom)}." : "") +
+        (clashes.Count > 0 ? $" Every group with room clashes with their timetable: {string.Join(", ", clashes)}." : "");
 
     private Enrolment NewEnrolment(int organizationId, string studentId, CourseGroup group, int? bundleId) => new()
     {

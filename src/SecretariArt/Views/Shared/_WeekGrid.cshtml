@@ -1,0 +1,97 @@
+@model WeekGridModel
+@*
+    A week calendar. Wide screens get a time grid (one column per day, blocks placed by time); phones get the same
+    classes as a list per day. Clashes say so in words as well as in red.
+*@
+@{
+    const double pxPerMinute = 1.1;
+    int totalMinutes = (int)(Model.To - Model.From).TotalMinutes;
+    if (totalMinutes <= 0) { totalMinutes = 60; }
+    var placed = Model.Lanes();
+    string Top(TimeOnly t) => $"{(t - Model.From).TotalMinutes * pxPerMinute:0}px";
+    string Height(WeekBlock b) => $"{Math.Max(22, (b.Ends - b.Starts).TotalMinutes * pxPerMinute - 2):0}px";
+    var hours = Enumerable.Range(0, totalMinutes / 60 + 1).Select(h => Model.From.AddHours(h)).Where(h => h <= Model.To && h >= Model.From).ToList();
+}
+
+@if (Model.Blocks.Count == 0)
+{
+    <div class="empty-state small"><i class="bi bi-calendar3" aria-hidden="true"></i><p>@Model.EmptyText</p></div>
+}
+else
+{
+    <div class="week-grid" role="group" aria-label="@Model.Label" style="--day-count: @Model.Days.Count">
+        <div class="week-head">
+            <div></div>
+            @foreach (var day in Model.Days)
+            {
+                <div class="week-day-name">@day</div>
+            }
+        </div>
+        <div class="week-body" style="height: @((totalMinutes * pxPerMinute + 8).ToString("0"))px">
+            <div class="week-hours">
+                @foreach (var hour in hours)
+                {
+                    <span style="top: @Top(hour)">@hour.ToString("HH:mm")</span>
+                }
+            </div>
+            @foreach (var day in Model.Days)
+            {
+                <div class="week-col">
+                    @foreach (var hour in hours)
+                    {
+                        <div class="week-line" style="top: @Top(hour)"></div>
+                    }
+                    @foreach (var (block, lane, lanes) in placed.Where(p => p.Block.Day == day))
+                    {
+                        string css = $"week-block tone-{block.Tone % 6}{(block.Alert != null ? " clash" : block.Note != null ? " note" : "")}" +
+                                     ((block.Ends - block.Starts).TotalMinutes switch { < 60 => " short", < 90 => " medium", _ => "" });
+                        string style = $"top: {Top(block.Starts)}; height: {Height(block)}; left: calc({lane} * 100% / {lanes}); width: calc(100% / {lanes} - 3px);";
+                        string tip = $"{block.Title}, {block.Day} {block.Starts:HH:mm}–{block.Ends:HH:mm}" +
+                                     (block.Line2 != null ? $", {block.Line2}" : "") + (block.Alert != null ? $". {block.Alert}" : "") + (block.Note != null ? $". {block.Note}" : "");
+                        if (block.Url != null)
+                        {
+                            <a class="@css" style="@style" href="@block.Url" title="@tip">
+                                <partial name="_WeekBlockBody" model="block" />
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="@css" style="@style" title="@tip">
+                                <partial name="_WeekBlockBody" model="block" />
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="week-agenda" aria-label="@Model.Label">
+        @foreach (var day in Model.Days.Where(d => Model.Blocks.Any(b => b.Day == d)))
+        {
+            <h3 class="agenda-day">@day</h3>
+            <ul class="agenda-list">
+                @foreach (var block in Model.Blocks.Where(b => b.Day == day).OrderBy(b => b.Starts))
+                {
+                    <li class="agenda-item tone-@(block.Tone % 6)@(block.Alert != null ? " clash" : block.Note != null ? " note" : "")">
+                        <span class="agenda-time">@block.Starts.ToString("HH:mm")–@block.Ends.ToString("HH:mm")</span>
+                        <span class="agenda-text">
+                            @if (block.Url != null)
+                            {
+                                <a href="@block.Url"><strong>@block.Title</strong></a>
+                            }
+                            else
+                            {
+                                <strong>@block.Title</strong>
+                            }
+                            @if (block.Line2 != null) { <span class="d-block small">@block.Line2</span> }
+                            @if (block.Line3 != null) { <span class="d-block small text-muted">@block.Line3</span> }
+                            @if (block.Alert != null) { <span class="d-block small text-danger"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> @block.Alert</span> }
+                            else if (block.Note != null) { <span class="d-block small text-warning-emphasis"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> @block.Note</span> }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}

@@ -251,3 +251,98 @@ fieldset legend.section-title { float: none; }
     .admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
     .admin-tabs .nav-link { white-space: nowrap; }
 }
+
+/* ---- Schedules (milestone 3) ---- */
+/* Six tones for courses or organisations; text stays dark on every one for contrast. */
+.tone-0 { --tone-bg: #efe8f7; --tone-line: #55308a; }
+.tone-1 { --tone-bg: #e3f1ec; --tone-line: #1f6b4f; }
+.tone-2 { --tone-bg: #fdf0dc; --tone-line: #a86a12; }
+.tone-3 { --tone-bg: #e4eef8; --tone-line: #2b5c8a; }
+.tone-4 { --tone-bg: #f8e6ef; --tone-line: #9a3866; }
+.tone-5 { --tone-bg: #eef1e2; --tone-line: #5b6b1f; }
+
+.week-grid { background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); overflow-x: auto; }
+/* 6.25rem columns: six days fit the admin page at 1280 px without a sideways scroll (QA, S6). */
+.week-head, .week-body { display: grid; grid-template-columns: 3.5rem repeat(var(--day-count), minmax(6.25rem, 1fr)); min-width: calc(3.5rem + var(--day-count) * 6.25rem); }
+.week-head { border-bottom: 1px solid var(--sa-line); background: #f3eff8; }
+.week-day-name { padding: 0.5rem; font-weight: 600; font-size: 0.85rem; color: var(--sa-muted); text-align: center; }
+.week-body { position: relative; }
+.week-hours { position: relative; }
+.week-hours span { position: absolute; right: 0.4rem; transform: translateY(-50%); font-size: 0.72rem; color: var(--sa-muted); }
+.week-hours span:first-child { transform: none; }
+.week-col { position: relative; border-left: 1px solid var(--sa-line); }
+.week-line { position: absolute; left: 0; right: 0; border-top: 1px dashed #ece7f3; }
+.week-block {
+    position: absolute; margin: 1px 0 0 2px; padding: 0.2rem 0.35rem; overflow: hidden; border-radius: 0.4rem;
+    background: var(--tone-bg); border-left: 4px solid var(--tone-line); color: var(--sa-ink); text-decoration: none;
+    font-size: 0.76rem; line-height: 1.2; display: flex; flex-direction: column; gap: 1px;
+}
+a.week-block:hover, a.week-block:focus-visible { color: var(--sa-ink); box-shadow: 0 4px 10px rgba(31, 26, 46, 0.18); z-index: 2; }
+.week-block .wb-time { font-weight: 600; font-size: 0.7rem; color: var(--sa-muted); }
+.week-block .wb-title { font-weight: 600; }
+.week-block .wb-line { color: #4d4660; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Under an hour there's room for the time and the title only: the rest is in the hover text and on the class page,
+   rather than a line cut through the middle of its letters. */
+.week-block.short .wb-line { display: none; }
+.week-block.short .wb-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Up to 90 minutes: a one-line title and one detail line, so a long title can't squeeze the rest into clipped
+   strips (QA, S11). */
+.week-block.medium .wb-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-block.medium .wb-line + .wb-line { display: none; }
+/* A clash: red and striped, plus a red icon and words (never colour alone). */
+.week-block.clash {
+    border-left-color: #b42318; outline: 2px solid #b42318; outline-offset: -2px;
+    background: repeating-linear-gradient(135deg, #fde8e6, #fde8e6 6px, #fbd5d1 6px, #fbd5d1 12px);
+}
+.week-block.clash .wb-title i { color: #b42318; }
+.week-block.note .wb-title i { color: #a86a12; }
+
+.week-agenda { display: none; }
+.agenda-day { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.agenda-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+.agenda-item {
+    display: flex; gap: 0.75rem; padding: 0.55rem 0.75rem; border-radius: 0.5rem; background: var(--tone-bg);
+    border-left: 4px solid var(--tone-line);
+}
+.agenda-item.clash { border-left-color: #b42318; background: #fde8e6; }
+.agenda-time { font-weight: 600; white-space: nowrap; min-width: 6.2rem; }
+@media (max-width: 767.98px) {
+    .week-grid { display: none; }
+    .week-agenda { display: block; }
+}
+
+.schedule-summary { display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; padding: 0.9rem 1.25rem; background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius); }
+.schedule-summary strong { font-size: 1.25rem; }
+.schedule-summary span { color: var(--sa-muted); font-size: 0.85rem; }
+
+.issue-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; font-size: 0.9rem; }
+.issue-list li { padding: 0.45rem 0.7rem; border-radius: 0.4rem; border-left: 4px solid; }
+.issue-list li.problem { background: #fde8e6; border-color: #b42318; }
+.issue-list li.warning { background: #fff4d6; border-color: #a86a12; }
+.issue-list a { font-weight: 600; margin-right: 0.35rem; }
+
+.group-progress, .suggestion-list, .slot-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.group-progress li, .suggestion-list li, .slot-list li {
+    display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.7rem; background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: 0.5rem;
+}
+.group-progress li.done { opacity: 0.7; }
+.suggestion-list li { justify-content: flex-start; }
+
+.legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; }
+.legend-swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 0.2rem; background: var(--tone-bg); border-left: 4px solid var(--tone-line); vertical-align: -0.1rem; }
+
+.bell-link { position: relative; }
+.bell-count {
+    display: inline-block; min-width: 1.15rem; padding: 0 0.3rem; margin-left: 0.15rem; border-radius: 1rem;
+    background: var(--sa-amber); color: var(--sa-violet); font-size: 0.7rem; font-weight: 700; text-align: center; line-height: 1.15rem;
+}
+.app-navbar .nav-link.active .bell-count { background: var(--sa-violet); color: #fff; }
+.notification-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.notification-list li {
+    padding: 0.75rem 1rem; background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: 0.5rem;
+    display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+}
+.notification-list li.unread { border-left: 4px solid var(--sa-amber); background: #fffaf0; font-weight: 500; }
+.notification-meta { color: var(--sa-muted); font-size: 0.85rem; white-space: nowrap; }
+.notification-meta a { margin-left: 0.5rem; }

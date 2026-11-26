@@ -54,8 +54,20 @@ public static class DisplayNames
         return consecutive ? $"{Short(chosen[0])}–{Short(chosen[^1])}" : string.Join(", ", chosen.Select(Short));
     }
 
+    // The week as people read a timetable: Monday first.
+    public static readonly DayOfWeek[] Week =
+        [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    public static TeachingDays ToTeachingDay(this DayOfWeek day) => (TeachingDays)(1 << (((int)day + 6) % 7));
+
+    public static IEnumerable<DayOfWeek> Days(this TeachingDays days) => Week.Where(d => days.HasFlag(d.ToTeachingDay()));
+
+    public static string Short(this DayOfWeek day) => day.ToString()[..3];
+
     // "1 course", "3 courses".
     public static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+
+    public static string Plural(int count, string noun, string plural) => $"{count} {(count == 1 ? noun : plural)}";
 
     // "1 h 30 min", "45 min", "2 h".
     public static string Minutes(int minutes) => (minutes / 60, minutes % 60) switch

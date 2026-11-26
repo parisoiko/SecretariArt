@@ -1,0 +1,119 @@
+@model PersonalScheduleViewModel
+@{
+    ViewData["Title"] = Model.Tab == "availability" ? "Availability" : "Schedule";
+    var clashes = Model.Sessions.Where(s => s.Clash != null).ToList();
+}
+
+<header class="page-header">
+    <h1>Schedule</h1>
+    <p>Your classes in every organisation, in one week. They repeat every week of each organisation's term.</p>
+</header>
+
+<nav aria-label="Schedule sections">
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link @(Model.Tab == "week" ? "active" : "")" aria-current="@(Model.Tab == "week" ? "page" : null)"
+               asp-action="Index"><i class="bi bi-calendar-week" aria-hidden="true"></i> My week</a>
+        </li>
+        @if (Model.Roles.IsTeacher)
+        {
+            <li class="nav-item">
+                <a class="nav-link @(Model.Tab == "availability" ? "active" : "")" aria-current="@(Model.Tab == "availability" ? "page" : null)"
+                   asp-action="Index" asp-route-tab="availability"><i class="bi bi-calendar-check" aria-hidden="true"></i> Availability</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+@if (Model.Tab == "week")
+{
+    @if (Model.Organizations.Count > 1)
+    {
+        <ul class="legend mb-3" aria-label="Organisations">
+            @foreach (var organization in Model.Organizations)
+            {
+                <li><span class="legend-swatch tone-@(Model.Tones[organization.Id] % 6)" aria-hidden="true"></span> @organization.Name</li>
+            }
+        </ul>
+    }
+
+    @if (clashes.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-octagon me-2" aria-hidden="true"></i>
+            <strong>@DisplayNames.Plural(clashes.Count, "class", "classes") clash.</strong>
+            You can't be in two places at once: tell the organisations involved, so one of them can move a class.
+            <ul class="mb-0 mt-2">
+                @foreach (var clash in clashes)
+                {
+                    <li>@clash.Session.Group!.Course!.Name (@clash.Organization.Name), @clash.Session.Day @clash.Session.Starts.ToString("HH:mm"): @clash.Clash</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <partial name="_WeekGrid" model="Model.Grid" />
+}
+else
+{
+    <p class="text-muted">Tell each organisation when you can teach there. Admins see it when they build the timetable,
+       and classes outside it are flagged to them.</p>
+
+    @foreach (var place in Model.Places)
+    {
+        var rules = place.Rules;
+        <section class="form-card mb-4" aria-labelledby="place-@place.Organization.Id">
+            <h2 class="section-title" id="place-@place.Organization.Id">
+                <span class="legend-swatch tone-@(Model.Tones.GetValueOrDefault(place.Organization.Id) % 6)" aria-hidden="true"></span>
+                @place.Organization.Name
+            </h2>
+            <p class="text-muted small">Teaching there happens @rules.TeachingDays.Display(), @rules.DayStarts.ToString("HH:mm")–@rules.DayEnds.ToString("HH:mm").</p>
+
+            @if (place.Slots.Count == 0)
+            {
+                <p><em>You haven't posted any times yet.</em></p>
+            }
+            else
+            {
+                <ul class="slot-list">
+                    @foreach (var slot in place.Slots)
+                    {
+                        <li>
+                            <span><strong>@slot.Day</strong> @slot.From.ToString("HH:mm")–@slot.To.ToString("HH:mm")</span>
+                            <form asp-action="RemoveAvailability" asp-route-availabilityId="@slot.Id" method="post" class="d-inline"
+                                  data-confirm="Remove @slot.Day @slot.From.ToString("HH:mm")–@slot.To.ToString("HH:mm") at @place.Organization.Name?">
+                                <button class="btn btn-sm btn-link text-danger p-0" aria-label="Remove @slot.Day @slot.From.ToString("HH:mm")–@slot.To.ToString("HH:mm")">
+                                    <i class="bi bi-x-circle" aria-hidden="true"></i> Remove
+                                </button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <form asp-action="AddAvailability" method="post" class="row g-2 align-items-end mt-1">
+                <input type="hidden" name="OrganizationId" value="@place.Organization.Id" />
+                <div class="col-sm-4">
+                    <label class="form-label small mb-1" for="day-@place.Organization.Id">Day</label>
+                    <select class="form-select" id="day-@place.Organization.Id" name="Day" required>
+                        @foreach (var day in DisplayNames.Week)
+                        {
+                            <option value="@day" selected="@(rules.TeachingDays.HasFlag(day.ToTeachingDay()) && day == rules.TeachingDays.Days().First())">@day</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6 col-sm-3">
+                    <label class="form-label small mb-1" for="from-@place.Organization.Id">From</label>
+                    <input class="form-control" type="time" id="from-@place.Organization.Id" name="From" value="@rules.DayStarts.ToString("HH:mm")" required />
+                </div>
+                <div class="col-6 col-sm-3">
+                    <label class="form-label small mb-1" for="to-@place.Organization.Id">To</label>
+                    <input class="form-control" type="time" id="to-@place.Organization.Id" name="To" value="@rules.DayEnds.ToString("HH:mm")" required />
+                </div>
+                <div class="col-sm-2">
+                    <button type="submit" class="btn btn-primary w-100">Add</button>
+                </div>
+            </form>
+        </section>
+    }
+}

@@ -1,0 +1,16 @@
+@model WeekBlock
+<span class="wb-time">@Model.Starts.ToString("HH:mm")–@Model.Ends.ToString("HH:mm")</span>
+<span class="wb-title">
+    @if (Model.Alert != null)
+    {
+        <i class="bi bi-exclamation-octagon-fill" aria-hidden="true"></i><span class="visually-hidden">Clash: </span>
+    }
+    else if (Model.Note != null)
+    {
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span class="visually-hidden">Check: </span>
+    }
+    @Model.Title
+</span>
+@if (Model.Line2 != null) { <span class="wb-line">@Model.Line2</span> }
+@if (Model.Line3 != null) { <span class="wb-line">@Model.Line3</span> }
+@if (Model.Alert != null) { <span class="visually-hidden">@Model.Alert</span> }

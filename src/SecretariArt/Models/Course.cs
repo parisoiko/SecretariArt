@@ -47,6 +47,7 @@ public class CourseGroup
     public ApplicationUser? Teacher { get; set; }
 
     public List<Enrolment> Enrolments { get; set; } = [];
+    public List<ClassSession> Sessions { get; set; } = [];
 }
 
 // A set of courses taken together (e.g. "Year 1", "Full-time foundation"), so a student is enrolled in all at once.

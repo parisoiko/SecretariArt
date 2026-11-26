@@ -273,6 +273,48 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("BundleCourses");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.ClassSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClassroomId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Day")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<TimeOnly>("Ends")
+                        .HasColumnType("time");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("Starts")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassroomId");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("OrganizationId", "Day");
+
+                    b.ToTable("ClassSessions");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Classroom", b =>
                 {
                     b.Property<int>("Id")
@@ -499,6 +541,45 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("Memberships");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("UserId", "ReadAt");
+
+                    b.ToTable("Notifications");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Organization", b =>
                 {
                     b.Property<int>("Id")
@@ -625,6 +706,41 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("OrganizationRules");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.TeacherAvailability", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Day")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<TimeOnly>("From")
+                        .HasColumnType("time");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TeacherId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<TimeOnly>("To")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("TeacherId", "OrganizationId");
+
+                    b.ToTable("TeacherAvailability");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -704,6 +820,25 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Bundle");
 
                     b.Navigation("Course");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.ClassSession", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Classroom", "Classroom")
+                        .WithMany()
+                        .HasForeignKey("ClassroomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.CourseGroup", "Group")
+                        .WithMany("Sessions")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Classroom");
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Classroom", b =>
@@ -818,6 +953,24 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.Notification", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Organization", b =>
                 {
                     b.HasOne("SecretariArt.Models.ApplicationUser", "RequestedBy")
@@ -838,6 +991,25 @@ namespace SecretariArt.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Organization");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.TeacherAvailability", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SecretariArt.Models.ApplicationUser", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.ApplicationUser", b =>
@@ -862,6 +1034,8 @@ namespace SecretariArt.Data.Migrations
             modelBuilder.Entity("SecretariArt.Models.CourseGroup", b =>
                 {
                     b.Navigation("Enrolments");
+
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("SecretariArt.Models.Organization", b =>

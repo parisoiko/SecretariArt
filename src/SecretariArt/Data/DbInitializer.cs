@@ -49,6 +49,12 @@ public static class DbInitializer
             {
                 await SeedDemoAdministrationAsync(db, users);
             }
+
+            // Milestone 3: a timetable, availability and a few notifications, once the groups exist.
+            if (!await db.ClassSessions.AnyAsync() && await db.CourseGroups.AnyAsync())
+            {
+                await SeedDemoScheduleAsync(db);
+            }
         }
     }
 
@@ -270,6 +276,85 @@ public static class DbInitializer
             CourseGroup balletA = AddGroup(ballet, "A", 14, elena);
             db.CourseGroups.AddRange(balletA, AddGroup(contemporary, "Evening", 12, elena));
             Enrol(dimitra, balletA);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Development only: Athens' weekly timetable and its teachers' availability, plus Patras' ballet class, which
+    // clashes on purpose with a class Dimitra teaches in Athens (her calendar shows it in red). Looked up by name and
+    // skipped where something is missing, so it also works on a dev database that has been edited by hand.
+    private static async Task SeedDemoScheduleAsync(SecretariArtDbContext db)
+    {
+        DateTime now = DateTime.UtcNow;
+        var groups = await db.CourseGroups.Include(g => g.Course).Include(g => g.Enrolments).ToListAsync();
+        var rooms = await db.Classrooms.ToListAsync();
+        var organizations = await db.Organizations.Where(o => o.InviteCode == "ATHENS26" || o.InviteCode == "PATRAS26").ToListAsync();
+
+        void Session(string organizationCode, string course, string group, string room, DayOfWeek day, int hour, int minute = 0)
+        {
+            Organization? organization = organizations.FirstOrDefault(o => o.InviteCode == organizationCode);
+            CourseGroup? g = groups.FirstOrDefault(x => x.OrganizationId == organization?.Id && x.Course!.Name == course && x.Name == group);
+            Classroom? r = rooms.FirstOrDefault(x => x.OrganizationId == organization?.Id && x.Name == room);
+            if (g == null || r == null)
+            {
+                return;
+            }
+
+            var starts = new TimeOnly(hour, minute);
+            db.ClassSessions.Add(new ClassSession
+            {
+                OrganizationId = organization!.Id, GroupId = g.Id, ClassroomId = r.Id, Day = day,
+                Starts = starts, Ends = starts.AddMinutes(g.Course!.SessionMinutes), UpdatedAt = now.AddDays(-3),
+            });
+            var people = g.Enrolments.Select(e => e.StudentId).Concat(g.TeacherId == null ? [] : [g.TeacherId]);
+            foreach (string userId in people)
+            {
+                db.Notifications.Add(new Notification
+                {
+                    UserId = userId, OrganizationId = organization.Id, CreatedAt = now.AddDays(-3), Url = "/schedule",
+                    Text = $"{organization.Name}: New class: {course} (group {group}) on {day} {starts:HH:mm}–{starts.AddMinutes(g.Course.SessionMinutes):HH:mm} in {room}.",
+                });
+            }
+        }
+
+        Session("ATHENS26", "Acting I", "A", "Main stage", DayOfWeek.Monday, 10);
+        Session("ATHENS26", "Acting I", "A", "Main stage", DayOfWeek.Thursday, 10);
+        Session("ATHENS26", "Acting I", "B", "Main stage", DayOfWeek.Monday, 14);
+        Session("ATHENS26", "Acting I", "B", "Main stage", DayOfWeek.Thursday, 14);
+        Session("ATHENS26", "Voice and speech", "A", "Rehearsal room 1", DayOfWeek.Tuesday, 10);
+        Session("ATHENS26", "Voice and speech", "B", "Rehearsal room 1", DayOfWeek.Tuesday, 12);
+        Session("ATHENS26", "Movement for actors", "A", "Studio A", DayOfWeek.Tuesday, 18);
+        Session("ATHENS26", "Movement for actors", "A", "Studio A", DayOfWeek.Friday, 10);
+        Session("ATHENS26", "Theatre history", "A", "Seminar room", DayOfWeek.Wednesday, 10);
+        Session("PATRAS26", "Ballet for beginners", "A", "Studio 1", DayOfWeek.Tuesday, 18);
+        Session("PATRAS26", "Ballet for beginners", "A", "Studio 1", DayOfWeek.Thursday, 18);
+        Session("PATRAS26", "Contemporary", "Evening", "Studio 2", DayOfWeek.Wednesday, 19);
+
+        Organization? athens = organizations.FirstOrDefault(o => o.InviteCode == "ATHENS26");
+        if (athens != null)
+        {
+            var teachers = await db.Users.Where(u => u.Email == "dimitra@demo.secretariart.app" || u.Email == "petros@demo.secretariart.app")
+                .ToDictionaryAsync(u => u.Email!);
+            void Available(string email, DayOfWeek day, int from, int to)
+            {
+                if (teachers.TryGetValue(email, out ApplicationUser? teacher))
+                {
+                    db.TeacherAvailability.Add(new TeacherAvailability
+                    {
+                        OrganizationId = athens.Id, TeacherId = teacher.Id, Day = day, From = new TimeOnly(from, 0), To = new TimeOnly(to, 0),
+                    });
+                }
+            }
+
+            Available("dimitra@demo.secretariart.app", DayOfWeek.Monday, 9, 14);
+            Available("dimitra@demo.secretariart.app", DayOfWeek.Tuesday, 17, 20);
+            Available("dimitra@demo.secretariart.app", DayOfWeek.Thursday, 9, 14);
+            Available("dimitra@demo.secretariart.app", DayOfWeek.Friday, 9, 13);
+            Available("petros@demo.secretariart.app", DayOfWeek.Monday, 13, 18);
+            Available("petros@demo.secretariart.app", DayOfWeek.Tuesday, 9, 14);
+            Available("petros@demo.secretariart.app", DayOfWeek.Wednesday, 9, 13);
+            Available("petros@demo.secretariart.app", DayOfWeek.Thursday, 13, 18);
         }
 
         await db.SaveChangesAsync();

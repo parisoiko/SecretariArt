@@ -6,6 +6,10 @@
     ViewData["Title"] = $"{course.Name} · {organization.Name}";
     string here = Context.Request.Path;
     int groupCount = course.Groups.Count;
+
+    // Deleting takes classes off the timetable too; the confirmation says so, as the result does (QA, S5).
+    string OffTimetable(int classes) => classes == 0 ? "" :
+        $" {DisplayNames.Plural(classes, "weekly class", "weekly classes")} will come off the timetable, and the people in them will be told.";
 }
 
 <partial name="_AdminHeader" model="@("courses")" />
@@ -24,7 +28,7 @@
         <div class="d-flex gap-2">
             <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
             <form asp-action="Delete" asp-route-organizationId="@organization.Id" asp-route-courseId="@course.Id" method="post"
-                  data-confirm="Delete @course.Name@(groupCount > 0 ? $", with its {DisplayNames.Plural(groupCount, "group")} and {DisplayNames.Plural(overview.Enrolled, "enrolment")}" : "")? This can't be undone.">
+                  data-confirm="Delete @course.Name@(groupCount > 0 ? $", with its {DisplayNames.Plural(groupCount, "group")} and {DisplayNames.Plural(overview.Enrolled, "enrolment")}" : "")?@OffTimetable(course.Groups.Sum(g => g.Sessions.Count)) This can't be undone.">
                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
             </form>
         </div>
@@ -96,7 +100,7 @@
             <div class="d-flex gap-2">
                 <a class="btn btn-sm btn-outline-secondary" asp-action="EditGroup" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>
                 <form asp-action="DeleteGroup" asp-route-organizationId="@organization.Id" asp-route-groupId="@group.Id" method="post"
-                      data-confirm="Delete group @group.Name of @course.Name?@(group.Enrolments.Count > 0 ? $" {DisplayNames.Plural(group.Enrolments.Count, "student")} will no longer be enrolled in it." : "")">
+                      data-confirm="Delete group @group.Name of @course.Name?@(group.Enrolments.Count > 0 ? $" {DisplayNames.Plural(group.Enrolments.Count, "student")} will no longer be enrolled in it." : "")@OffTimetable(group.Sessions.Count)">
                     <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
                 </form>
             </div>

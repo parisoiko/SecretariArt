@@ -1,0 +1,174 @@
+@model ScheduleViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Schedule · {organization.Name}";
+    var schedule = Model.Schedule;
+    var rules = schedule.Rules;
+    int placed = schedule.Groups.Sum(g => Math.Min(g.Placed, g.Needed));
+    int needed = schedule.Groups.Sum(g => g.Needed);
+    var teachers = schedule.Groups.Select(g => g.Group.Teacher).OfType<ApplicationUser>().DistinctBy(t => t.Id).OrderBy(t => t.LastName).ToList();
+    bool filtered = Model.RoomId != null || Model.TeacherId != null || Model.GroupId != null;
+}
+
+<partial name="_AdminHeader" model="@("schedule")" />
+
+<div class="schedule-summary mb-3">
+    <div><strong>@placed of @needed</strong> <span>weekly classes placed</span></div>
+    <div class="@(Model.ProblemCount > 0 ? "text-danger" : "")"><strong>@Model.ProblemCount</strong> <span>with a clash</span></div>
+    <div class="@(Model.WarningCount > 0 ? "text-warning-emphasis" : "")"><strong>@Model.WarningCount</strong> <span>to check</span></div>
+    <div class="text-muted small align-self-center">
+        @rules.TeachingDays.Display(), @rules.DayStarts.ToString("HH:mm")–@rules.DayEnds.ToString("HH:mm")
+        @if (rules.TermStarts is DateOnly termStarts && rules.TermEnds is DateOnly termEnds)
+        {
+            <span>· every week from @termStarts.ToString("d MMM yyyy") to @termEnds.ToString("d MMM yyyy")</span>
+        }
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-8">
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-3" aria-label="Show part of the timetable">
+            <div>
+                <label for="roomId" class="form-label small mb-1">Classroom</label>
+                <select id="roomId" name="roomId" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var room in schedule.Rooms.OrderBy(r => r.Name))
+                    {
+                        <option value="@room.Id" selected="@(Model.RoomId == room.Id)">@room.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="teacherId" class="form-label small mb-1">Teacher</label>
+                <select id="teacherId" name="teacherId" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var teacher in teachers)
+                    {
+                        <option value="@teacher.Id" selected="@(Model.TeacherId == teacher.Id)">@teacher.FullName</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="groupId" class="form-label small mb-1">Group</label>
+                <select id="groupId" name="groupId" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    @foreach (var progress in schedule.Groups.OrderBy(g => g.Group.Course!.Name).ThenBy(g => g.Group.Name))
+                    {
+                        <option value="@progress.Group.Id" selected="@(Model.GroupId == progress.Group.Id)">@progress.Group.Course!.Name · @progress.Group.Name</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Show</button>
+            @if (filtered)
+            {
+                <a class="btn btn-sm btn-link" asp-action="Index" asp-route-organizationId="@organization.Id">Show everything</a>
+            }
+        </form>
+
+        @if (schedule.Sessions.Count == 0)
+        {
+            <div class="empty-state small">
+                <i class="bi bi-calendar-week" aria-hidden="true"></i>
+                <p>No classes in the timetable yet. Add one with the form, or press <strong>Suggest times</strong> next to a group
+                   to see free slots that fit the rules, the rooms and the teacher.</p>
+            </div>
+        }
+        else
+        {
+            <partial name="_WeekGrid" model="Model.Grid" />
+        }
+
+        @{
+            var flagged = schedule.Sessions.Where(s => s.Problems.Count > 0 || s.Warnings.Count > 0).ToList();
+        }
+        @if (flagged.Count > 0)
+        {
+            <section class="mt-4" aria-labelledby="flagged-title">
+                <h2 class="section-title" id="flagged-title">Needs attention</h2>
+                <ul class="issue-list">
+                    @foreach (var view in flagged)
+                    {
+                        <li class="@(view.Problems.Count > 0 ? "problem" : "warning")">
+                            <a asp-action="Edit" asp-route-organizationId="@organization.Id" asp-route-sessionId="@view.Session.Id">
+                                @view.Group.Course!.Name · @view.Group.Name, @view.Session.Day @view.Session.Starts.ToString("HH:mm")
+                            </a>
+                            <span class="visually-hidden">@(view.Problems.Count > 0 ? "Clash:" : "Check:")</span>
+                            @string.Join(" ", view.Problems.Concat(view.Warnings))
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </div>
+
+    <div class="col-xl-4">
+        <section class="form-card mb-4" id="add-class" aria-labelledby="add-title">
+            <h2 class="section-title" id="add-title">Add a class</h2>
+            <partial name="_SessionForm" model="Model.Form" />
+        </section>
+
+        @if (Model.SuggestionsFor is CourseGroup suggestionsFor)
+        {
+            <section class="form-card mb-4" id="suggestions" aria-labelledby="suggest-title">
+                <h2 class="section-title" id="suggest-title">Free times for @suggestionsFor.Course!.Name · @suggestionsFor.Name</h2>
+                @if (Model.Suggestions!.Count == 0)
+                {
+                    <p class="text-muted mb-0">No free slot fits: every time clashes with a room, the teacher or a student, or there's no
+                       suitable room. Check the Rules and Classrooms tabs.</p>
+                }
+                else
+                {
+                    <p class="text-muted small">The best times on each teaching day, those without notes first. Days when the group already meets come last. One click adds the class.</p>
+                    <ul class="suggestion-list">
+                        @foreach (var suggestion in Model.Suggestions!)
+                        {
+                            <li>
+                                <form asp-action="Create" asp-route-organizationId="@organization.Id" method="post">
+                                    <input type="hidden" name="GroupId" value="@suggestionsFor.Id" />
+                                    <input type="hidden" name="Day" value="@suggestion.Day" />
+                                    <input type="hidden" name="Starts" value="@suggestion.Starts.ToString("HH:mm")" />
+                                    <input type="hidden" name="ClassroomId" value="@suggestion.Room.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Use</button>
+                                </form>
+                                <div>
+                                    <strong>@suggestion.Day.Short() @suggestion.Starts.ToString("HH:mm")–@suggestion.Ends.ToString("HH:mm")</strong>
+                                    <span class="text-muted">· @suggestion.Room.Name</span>
+                                    @foreach (var warning in suggestion.Warnings)
+                                    {
+                                        <div class="small text-warning-emphasis"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> @warning</div>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+
+        <section aria-labelledby="groups-title">
+            <h2 class="section-title" id="groups-title">Groups</h2>
+            @if (schedule.Groups.Count == 0)
+            {
+                <p class="text-muted">No groups yet: add them on the <a asp-controller="Courses" asp-action="Index" asp-route-organizationId="@organization.Id">Courses</a> tab.</p>
+            }
+            <ul class="group-progress">
+                @foreach (var progress in schedule.Groups)
+                {
+                    <li class="@(progress.Done ? "done" : "")">
+                        <div>
+                            <strong>@progress.Group.Course!.Name · @progress.Group.Name</strong>
+                            <span class="d-block small text-muted">@progress.Placed of @progress.Needed a week @(progress.Done ? "✓" : "")</span>
+                        </div>
+                        @if (!progress.Done)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-organizationId="@organization.Id"
+                               asp-route-suggest="@progress.Group.Id" asp-fragment="suggestions">Suggest times</a>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    </div>
+</div>
+
+@section Scripts { <partial name="_ValidationScripts" /> }

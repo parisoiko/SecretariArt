@@ -55,13 +55,19 @@ public class ClassroomService(SecretariArtDbContext db) : IClassroomService
         return ServiceResult.Ok($"{classroom.Name} saved.");
     }
 
-    // Nothing refers to classrooms yet; once sessions do (milestone 3), deleting a room in use will be refused.
     public async Task<ServiceResult> DeleteAsync(int organizationId, int classroomId)
     {
         Classroom? classroom = await db.Classrooms.FirstOrDefaultAsync(c => c.Id == classroomId && c.OrganizationId == organizationId);
         if (classroom == null)
         {
             return NotFound;
+        }
+
+        // A room in the timetable can't just vanish: its classes would have nowhere to go.
+        int inUse = await db.ClassSessions.CountAsync(s => s.ClassroomId == classroomId);
+        if (inUse > 0)
+        {
+            return ServiceResult.Fail($"{classroom.Name} is used by {DisplayNames.Plural(inUse, "class", "classes")} in the timetable. Move them to another room on the Schedule tab first.");
         }
 
         db.Classrooms.Remove(classroom);

@@ -61,6 +61,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IClassroomService, ClassroomService>();
         services.AddScoped<ICourseService, CourseService>();
         services.AddScoped<IEnrolmentService, EnrolmentService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IScheduleService, ScheduleService>();
+        services.AddScoped<IAvailabilityService, AvailabilityService>();
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserMemberships, CurrentUserMemberships>();
