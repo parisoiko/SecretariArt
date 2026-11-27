@@ -74,3 +74,27 @@ public class InviteCodeLimitTests(InviteCodeLimitFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.OK, (await other.GetAsync("/join/ATHENS26")).StatusCode);
     }
 }
+
+public class RecoveryLimitFactory() : TinyLimitFactory("AccountRecovery", 2);
+
+// "Forgot your password?" is a Blazor page: the limit is on the page, but only posting the form counts.
+public class RecoveryLimitTests(RecoveryLimitFactory factory) : IClassFixture<RecoveryLimitFactory>
+{
+    [Fact]
+    public async Task AskingForResetLinks_IsStopped_ButOpeningThePageIsNot()
+    {
+        HttpClient browser = factory.CreateBrowser();
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/account/forgot-password")).StatusCode);
+        }
+
+        var form = new Dictionary<string, string> { ["Input.Email"] = "nobody@test.example" };
+        Assert.Equal(HttpStatusCode.OK, (await browser.SubmitFormAsync("/account/forgot-password", "/account/forgot-password", form)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.SubmitFormAsync("/account/forgot-password", "/account/forgot-password", form)).StatusCode);
+
+        HttpResponseMessage stopped = await browser.SubmitFormAsync("/account/forgot-password", "/account/forgot-password", form);
+        Assert.Equal(HttpStatusCode.TooManyRequests, stopped.StatusCode);
+        Assert.Contains("Too many attempts", await stopped.Content.ReadAsStringAsync());
+    }
+}

@@ -18,7 +18,7 @@ public class AccountSelfServiceTests(SecretariArtFactory factory)
         string email = await owner.RegisterNewUserAsync("Rena");
 
         HttpClient visitor = factory.CreateBrowser();
-        HttpResponseMessage sent = await visitor.SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Email"] = email });
+        HttpResponseMessage sent = await visitor.SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Input.Email"] = email });
         Assert.Contains("Check your email", await sent.Content.ReadAsStringAsync());
 
         string link = ResetLink(Assert.Single(factory.Emails.To(email)));
@@ -34,12 +34,30 @@ public class AccountSelfServiceTests(SecretariArtFactory factory)
         Assert.Contains("has expired or has already been used", await again.Content.ReadAsStringAsync());
     }
 
+    // The Blazor form (Components/Pages/Account/ForgotPassword.razor): the email from the sign-in page's link, and the
+    // validation messages of ForgotPasswordViewModel, checked on the server.
+    [Theory]
+    [InlineData("", "The Email field is required.")]
+    [InlineData("not-an-email", "Enter a valid email address")]
+    public async Task ForgotPassword_RefusesAMissingOrInvalidEmail_AndSendsNothing(string typed, string expectedError)
+    {
+        HttpClient visitor = factory.CreateBrowser();
+        Assert.Contains("value=\"rena@test.example\"", await visitor.GetStringAsync("/account/forgot-password?email=rena%40test.example"));
+
+        HttpResponseMessage refused = await visitor.SubmitFormAsync("/account/forgot-password", "/account/forgot-password",
+            new() { ["Input.Email"] = typed });
+
+        string page = await refused.Content.ReadAsStringAsync();
+        Assert.Contains(expectedError, page);
+        Assert.DoesNotContain("Check your email", page);
+    }
+
     [Fact]
     public async Task ForgotPassword_AnswersTheSameForAnUnknownEmail_AndSendsNothing()
     {
         string email = $"nobody.{Guid.NewGuid():N}@test.example";
         HttpResponseMessage sent = await factory.CreateBrowser()
-            .SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Email"] = email });
+            .SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Input.Email"] = email });
 
         Assert.Contains("Check your email", await sent.Content.ReadAsStringAsync());
         Assert.Empty(factory.Emails.To(email));
@@ -68,7 +86,7 @@ public class AccountSelfServiceTests(SecretariArtFactory factory)
         }
         Assert.Contains("Too many failed attempts", await (await factory.CreateBrowser().SignInAsync(email)).Content.ReadAsStringAsync());
 
-        await factory.CreateBrowser().SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Email"] = email });
+        await factory.CreateBrowser().SubmitFormAsync("/account/forgot-password", "/account/forgot-password", new() { ["Input.Email"] = email });
         string link = ResetLink(factory.Emails.To(email).Last());
         await factory.CreateBrowser().SubmitFormAsync(link, "/account/reset-password", ResetFields(link, NewPassword));
 

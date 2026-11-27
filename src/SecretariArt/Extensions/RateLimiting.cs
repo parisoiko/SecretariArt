@@ -70,12 +70,13 @@ public static class RateLimitPolicies
                     ? RateLimitPartition.GetNoLimiter("error-pages")
                     : Window(context, s => s.Global, "global"));
 
-            options.AddPolicy(SignIn, context => Window(context, s => s.SignIn, SignIn, byAddress: true));
-            options.AddPolicy(Register, context => Window(context, s => s.Register, Register, byAddress: true));
+            options.AddPolicy(SignIn, context => Action(context, s => s.SignIn, SignIn, byAddress: true));
+            options.AddPolicy(Register, context => Action(context, s => s.Register, Register, byAddress: true));
+            // Every look-up counts here, GETs included: /join/{code} links are how codes would be guessed.
             options.AddPolicy(InviteCodes, context => Window(context, s => s.InviteCodes, InviteCodes));
-            options.AddPolicy(OrganizationRequests, context => Window(context, s => s.OrganizationRequests, OrganizationRequests));
-            options.AddPolicy(Generation, context => Window(context, s => s.Generation, Generation));
-            options.AddPolicy(AccountRecovery, context => Window(context, s => s.AccountRecovery, AccountRecovery, byAddress: true));
+            options.AddPolicy(OrganizationRequests, context => Action(context, s => s.OrganizationRequests, OrganizationRequests));
+            options.AddPolicy(Generation, context => Action(context, s => s.Generation, Generation));
+            options.AddPolicy(AccountRecovery, context => Action(context, s => s.AccountRecovery, AccountRecovery, byAddress: true));
 
             options.OnRejected = (context, _) =>
             {
@@ -98,6 +99,13 @@ public static class RateLimitPolicies
 
     // A sliding window (four segments), so a burst at the edge of one window can't double the limit. Sign-in and
     // registration are counted per address even when someone is signed in: they are what an attacker scripts.
+    // Most named limits count what someone can script: posting a form. On a Blazor page the attribute covers the page's
+    // GET too (one endpoint serves both), and opening the page must not use up the attempts.
+    private static RateLimitPartition<string> Action(HttpContext context, Func<RateLimitSettings, RateLimit> pick, string policy, bool byAddress = false) =>
+        HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)
+            ? RateLimitPartition.GetNoLimiter($"{policy}:reading")
+            : Window(context, pick, policy, byAddress);
+
     private static RateLimitPartition<string> Window(HttpContext context, Func<RateLimitSettings, RateLimit> pick, string policy, bool byAddress = false)
     {
         RateLimit limit = pick(context.RequestServices.GetRequiredService<IOptionsMonitor<RateLimitSettings>>().CurrentValue);

@@ -77,6 +77,7 @@ public static class ServiceCollectionExtensions
 
         services.Configure<EmailSettings>(configuration.GetSection("Email"));
         services.AddSingleton<IEmailSender, PickupDirectoryEmailSender>();
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
 
         services.AddHttpContextAccessor();
         // X-Frame-Options comes from SecurityHeaders (DENY), not from anti-forgery (SAMEORIGIN, only on pages with forms).

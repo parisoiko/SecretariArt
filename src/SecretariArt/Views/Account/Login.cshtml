@@ -19,7 +19,7 @@
     <div class="mb-3">
         <div class="d-flex justify-content-between align-items-baseline">
             <label asp-for="Password" class="form-label"></label>
-            <a class="small" asp-action="ForgotPassword" asp-route-email="@Model.Email">Forgot your password?</a>
+            <a class="small" href="/account/forgot-password?email=@Uri.EscapeDataString(Model.Email)">Forgot your password?</a>
         </div>
         <input asp-for="Password" class="form-control" autocomplete="current-password" />
         <span asp-validation-for="Password" class="invalid-feedback d-block"></span>

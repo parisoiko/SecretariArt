@@ -14,11 +14,7 @@ namespace SecretariArt.Controllers;
 
 [AllowAnonymous]
 [Route("account")]
-public class AccountController(
-    UserManager<ApplicationUser> users,
-    SignInManager<ApplicationUser> signIn,
-    IEmailSender email,
-    IOptions<EmailSettings> emailSettings) : Controller
+public class AccountController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn) : Controller
 {
     [HttpGet("register")]
     public IActionResult Register(string? returnUrl = null)
@@ -126,43 +122,10 @@ public class AccountController(
         return RedirectToAction(nameof(Login));
     }
 
-    [HttpGet("forgot-password")]
-    public IActionResult ForgotPassword(string? email = null) => View(new ForgotPasswordViewModel { Email = email ?? "" });
-
-    [EnableRateLimiting(RateLimitPolicies.AccountRecovery)]
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
-    {
-        if (!ModelState.IsValid)
-        {
-            return View(model);
-        }
-
-        // The same answer whether or not the email has an account, so the form can't be used to find out who does.
-        if (await users.FindByEmailAsync(model.Email.Trim()) is ApplicationUser user)
-        {
-            string token = await users.GeneratePasswordResetTokenAsync(user);
-            string code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-            string link = PublicLink(Url.Action(nameof(ResetPassword), new { email = user.Email, code })!);
-            await email.SendAsync(new EmailMessage(user.Email!, "Reset your SecretariArt password", $"""
-                Hello {user.FirstName},
-
-                Someone (hopefully you) asked to reset the password of your SecretariArt account.
-                To choose a new password, open this link within two hours:
-
-                {link}
-
-                If you didn't ask for this, ignore this email: your password stays as it is.
-                """));
-        }
-
-        return View("ForgotPasswordSent", model.Email.Trim());
-    }
-
     [HttpGet("reset-password")]
     public IActionResult ResetPassword(string? email = null, string? code = null) =>
         string.IsNullOrEmpty(email) || string.IsNullOrEmpty(code)
-            ? RedirectToAction(nameof(ForgotPassword))
+            ? Redirect("/account/forgot-password")
             : View(new ResetPasswordViewModel { Email = email, Code = code });
 
     [EnableRateLimiting(RateLimitPolicies.AccountRecovery)]
@@ -178,7 +141,7 @@ public class AccountController(
         ApplicationUser? user = await users.FindByEmailAsync(model.Email);
         IdentityResult result = user is null
             ? IdentityResult.Failed(new IdentityError { Code = "InvalidToken" })
-            : await users.ResetPasswordAsync(user, DecodeCode(model.Code), model.Password);
+            : await users.ResetPasswordAsync(user, PasswordResetService.DecodeCode(model.Code), model.Password);
         if (result.Succeeded)
         {
             // Whoever was locked out by wrong guesses has now proved they own the email.
@@ -198,25 +161,6 @@ public class AccountController(
         }
         return View(model);
     }
-
-    private static string DecodeCode(string code)
-    {
-        try
-        {
-            return Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
-        }
-        catch (FormatException)
-        {
-            return "";  // A mangled link: Identity reports it as an invalid token.
-        }
-    }
-
-    // Links in emails point at the configured public address when there is one, not at whatever Host the request
-    // claimed (see EmailSettings.PublicUrl).
-    private string PublicLink(string path) =>
-        emailSettings.Value.PublicUrl is { Length: > 0 } baseUrl
-            ? baseUrl.TrimEnd('/') + path
-            : $"{Request.Scheme}://{Request.Host}{Request.PathBase}{path}";
 
     // Only ever redirect inside the site: returnUrl comes from the query string and could point anywhere.
     private IActionResult RedirectToLocal(string? returnUrl) =>

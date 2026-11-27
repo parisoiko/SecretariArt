@@ -1,0 +1,22 @@
+@using SecretariArt.Extensions
+
+@*
+    An email address that may wrap at "@" and "." on a narrow screen, not mid-word: <EmailText Value="@person.Email" />.
+    The Blazor version of @Html.Email(...). Blazor encodes the text itself; the <wbr /> elements mark where a line may
+    break. Blazor drops whitespace-only text between elements, so the line breaks below add no spaces to the address.
+*@
+@{
+    IReadOnlyList<string> parts = HtmlEmailExtensions.BreakPoints(Value);
+}
+@for (int i = 0; i < parts.Count; i++)
+{
+    if (i > 0)
+    {
+        <wbr />
+    }
+    @parts[i]
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+}

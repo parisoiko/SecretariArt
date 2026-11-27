@@ -13,6 +13,7 @@ has moved, and URLs never change.
 
 1. [Hosting Blazor next to MVC, and the first page](#1-hosting-blazor-next-to-mvc-and-the-first-page)
 2. [Layouts and navigation as components](#2-layouts-and-navigation-as-components)
+3. [The first form: Forgot your password?](#3-the-first-form-forgot-your-password)
 
 ---
 
@@ -127,3 +128,82 @@ listen on the document too.
 
 **Try it:** sign in as Eleni and open http://localhost:5100/admin/2/members (Patras isn't hers). The no-access page
 has her navigation and account menu, and "Sign out" works from it.
+
+---
+
+## 3. The first form: "Forgot your password?"
+
+**What moved:** `/account/forgot-password` and its "Check your email" answer became
+`Components/Pages/Account/ForgotPassword.razor`. It replaces the two `AccountController.ForgotPassword` actions and the
+views `ForgotPassword.cshtml` and `ForgotPasswordSent.cshtml`. Sending the link moved into a service,
+`Services/PasswordResetService.cs`, because a page, like a controller, shouldn't hold business logic.
+
+### `EditForm` and `[SupplyParameterFromForm]`
+```razor
+<EditForm Model="Input" FormName="forgot-password" OnValidSubmit="SendAsync" method="post">
+    <DataAnnotationsValidator />
+    <InputText id="email" @bind-Value="Input!.Email" class="form-control" />
+    <ValidationMessage For="() => Input!.Email" />
+</EditForm>
+
+@code {
+    [SupplyParameterFromForm] private ForgotPasswordViewModel? Input { get; set; }
+    protected override void OnInitialized() => Input ??= new ForgotPasswordViewModel();
+}
+```
+- On a plain **GET**, `Input` is null, so `OnInitialized` creates an empty model, or one with the email from the link.
+- On a **POST**, Blazor fills `Input` from the posted fields **before** `OnInitialized` runs, so `??=` keeps it. Then the
+  form validates it and calls `OnValidSubmit`, or shows the messages. This replaces MVC's model binding of the action's
+  `model` parameter and the `if (!ModelState.IsValid) return View(model);` dance.
+- The same view model (`ViewModels/AccountViewModels.cs`) and its `[Required]` and `[EmailAddress]` attributes are
+  reused: `<DataAnnotationsValidator />` reads them.
+- `InputText` with `@bind-Value` writes the `<input>` with the current value and the right `name`. `ValidationMessage`
+  shows that field's errors. `class="invalid-feedback d-block"` is passed on to each message, so it looks as before.
+
+### What the browser receives
+View the page's source and you'll find:
+```html
+<form method="post" action="/account/forgot-password?email=…">
+  <input type="hidden" name="_handler" value="forgot-password" />
+  <input type="hidden" name="__RequestVerificationToken" value="…" />
+  <input id="email" name="Input.Email" class="form-control valid" value="…" />
+```
+- **`_handler`** is the `FormName`. One page can hold several forms, and Blazor uses this to know which one was posted.
+  A POST without it is refused, which is why error pages are re-run as GETs (step 1).
+- **The anti-forgery token** is added by `EditForm` itself; there's no `asp-antiforgery` or global filter to think about.
+- **Field names** carry the property's name: `Input.Email`. That is why the tests now post `Input.Email`.
+- No `action` was written: a Blazor form posts back to its own page, query string included.
+
+### Validation happens on the server now
+The MVC pages used jQuery Validation to show messages before posting. Static Blazor pages have no client-side
+validation: the form posts, the server checks it, and the page comes back with the messages. On a fast site that's a
+fraction of a second, and it's the same check either way. (Interactive islands, from step 18, validate as you type.)
+
+### The page renders differently after a post
+"Check your email" isn't a second page or a redirect. `SendAsync` sets `sentTo`, and the markup shows the other half
+(`@if (sentTo == null) { … } else { … }`). That's what the MVC action did with `return View("ForgotPasswordSent", …)`.
+
+### Query strings: `[SupplyParameterFromQuery]`
+`[SupplyParameterFromQuery(Name = "email")] private string? EmailFromLink { get; set; }` reads `?email=` from the
+sign-in page's "Forgot your password?" link. MVC got it as an action parameter.
+
+### A component for reused markup: `<EmailText Value="…" />`
+`@Html.Email(...)` was an MVC HTML helper: it wraps email addresses at "@" and ".". Components can't use HTML helpers,
+so the splitting moved into a plain method (`HtmlEmailExtensions.BreakPoints`), used by both the helper and the new
+`Components/Shared/EmailText.razor`. A component parameter (`[Parameter] public string? Value`) is what a partial's
+`@model` was.
+
+### Rate limits on a Blazor page (`Extensions/RateLimiting.cs`)
+`@attribute [EnableRateLimiting(RateLimitPolicies.AccountRecovery)]` puts the limit on the page's endpoint, and one
+endpoint answers both the GET and the POST. With MVC the attribute sat on the POST action alone. So the form limits now
+let GETs through, and only posting counts: opening the page five times doesn't use up the attempts
+(`RecoveryLimitTests`). The invite-code limit is the exception: it still counts GETs, because `/join/{code}` links are
+how codes would be guessed.
+
+### The tests' form helper (`tests/.../Integration/SecretariArtFactory.cs`)
+`SubmitFormAsync` used to copy the first anti-forgery token on the page. Now it finds the form being submitted: by its
+action, or by `_handler` for one of several Blazor forms on a page. It copies that form's token and form name, then
+the given fields. MVC and Blazor pages are tested the same way.
+
+**Try it:** open http://localhost:5100/account/forgot-password, post it empty, then with an address, and view the
+source at each stage.

@@ -78,18 +78,60 @@ public class IntegrationTests : ICollectionFixture<SecretariArtFactory>
 
 public static class BrowserExtensions
 {
-    private static readonly Regex AntiforgeryToken = new("name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"");
+    private const string TokenField = "__RequestVerificationToken";
+    private const string HandlerField = "_handler";
+    private static readonly Regex Forms = new(@"<form\b([^>]*)>(.*?)</form>", RegexOptions.Singleline);
+    private static readonly Regex Inputs = new(@"<input\b[^>]*>");
+    private static readonly Regex Attribute = new("""\b(name|value|action)="([^"]*)" """.TrimEnd());
 
-    // Like a person filling in a form: load the page (for its anti-forgery token), then post the fields.
+    // Like a person filling in a form: load the page, find the form being submitted, then post its hidden fields
+    // (anti-forgery token, and for a Blazor form its name, "_handler") with the given fields.
+    // The form is the one named by a "_handler" field, if given (several Blazor forms post to the same page), or else
+    // the one whose action is postUrl. A page with neither falls back to its first token.
     public static async Task<HttpResponseMessage> SubmitFormAsync(
         this HttpClient client, string pageUrl, string postUrl, Dictionary<string, string> fields)
     {
         string page = await client.GetStringAsync(pageUrl);
-        Match token = AntiforgeryToken.Match(page);
-        Assert.True(token.Success, $"No anti-forgery token on {pageUrl}.");
+        string postPath = PathOf(postUrl);
+        var forms = Forms.Matches(page)
+            .Select(m => (Action: Attr(m.Groups[1].Value, "action"), Hidden: HiddenFields(m.Groups[2].Value)))
+            .Where(f => f.Hidden.ContainsKey(TokenField))  // only POST forms carry one; GET forms (filters) can share an action
+            .ToList();
+        var chosen = fields.TryGetValue(HandlerField, out string? handler)
+            ? forms.FirstOrDefault(f => f.Hidden.GetValueOrDefault(HandlerField) == handler)
+            : forms.FirstOrDefault(f => PathOf(f.Action ?? pageUrl) == postPath);
 
-        var form = new Dictionary<string, string>(fields) { ["__RequestVerificationToken"] = WebUtility.HtmlDecode(token.Groups[1].Value) };
+        Dictionary<string, string> hidden = chosen.Hidden
+            ?? HiddenFields(page).Where(h => h.Key == TokenField).ToDictionary();
+        Assert.True(hidden.ContainsKey(TokenField), $"No anti-forgery token for {postUrl} on {pageUrl}.");
+
+        var form = new Dictionary<string, string>(fields);
+        foreach (string name in new[] { TokenField, HandlerField })
+        {
+            if (hidden.TryGetValue(name, out string? value))
+            {
+                form.TryAdd(name, value);
+            }
+        }
         return await client.PostAsync(postUrl, new FormUrlEncodedContent(form));
+    }
+
+    // The anti-forgery token and Blazor's form name among a form's inputs (attributes in any order).
+    private static Dictionary<string, string> HiddenFields(string html) =>
+        Inputs.Matches(html)
+            .Select(m => (Name: Attr(m.Value, "name"), Value: Attr(m.Value, "value")))
+            .Where(i => i.Name is TokenField or HandlerField && i.Value != null)
+            .DistinctBy(i => i.Name)
+            .ToDictionary(i => i.Name!, i => i.Value!);
+
+    private static string? Attr(string tag, string name) =>
+        Attribute.Matches(tag).FirstOrDefault(m => m.Groups[1].Value == name) is { } m ? WebUtility.HtmlDecode(m.Groups[2].Value) : null;
+
+    // "/account/login?returnUrl=…" → "/account/login"; Blazor's relative actions ("account/logout") are site-relative.
+    private static string PathOf(string url)
+    {
+        string path = url.Split('?', '#')[0];
+        return path.StartsWith('/') ? path : "/" + path;
     }
 
     public static Task<HttpResponseMessage> SignInAsync(this HttpClient client, string email, string password = DbInitializer.DemoPassword) =>
