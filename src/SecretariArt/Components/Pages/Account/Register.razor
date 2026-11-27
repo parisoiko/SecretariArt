@@ -1,0 +1,157 @@
+@page "/account/register"
+@attribute [AllowAnonymous]
+@attribute [EnableRateLimiting(RateLimitPolicies.Register)]
+@layout AuthLayout
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.RateLimiting
+@using SecretariArt.Extensions
+@using SecretariArt.ViewModels
+@inject UserManager<ApplicationUser> Users
+@inject SignInManager<ApplicationUser> SignIn
+@inject NavigationManager Navigation
+
+@* Create an account. Replaces AccountController.Register (GET and POST) and Views/Account/Register.cshtml. *@
+
+<PageTitle>Create your account · SecretariArt</PageTitle>
+
+<h2>Create your account</h2>
+<p class="text-muted">One account for every school you work or study at.</p>
+
+@* EditContext instead of Model: the page keeps the form's state itself, so it can add the errors Identity reports
+   (an email already taken, a password rule) next to their fields. *@
+<EditForm EditContext="editContext" FormName="register" OnValidSubmit="RegisterAsync" OnInvalidSubmit="ForgetPasswords" method="post" novalidate>
+    <DataAnnotationsValidator />
+    @if (problem != null)
+    {
+        <div class="alert alert-danger" role="alert">@problem</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-sm-6">
+            <label for="first-name" class="form-label">First name</label>
+            <InputText id="first-name" @bind-Value="Input!.FirstName" class="form-control" autocomplete="given-name" autofocus />
+            <ValidationMessage For="() => Input!.FirstName" class="invalid-feedback d-block" />
+        </div>
+        <div class="col-sm-6">
+            <label for="last-name" class="form-label">Last name</label>
+            <InputText id="last-name" @bind-Value="Input!.LastName" class="form-control" autocomplete="family-name" />
+            <ValidationMessage For="() => Input!.LastName" class="invalid-feedback d-block" />
+        </div>
+        <div class="col-12">
+            <label for="email" class="form-label">Email</label>
+            <InputText id="email" @bind-Value="Input!.Email" class="form-control" autocomplete="email" />
+            <ValidationMessage For="() => Input!.Email" class="invalid-feedback d-block" />
+            @if (emailTaken)
+            {
+                @* Keeps the person moving: they most likely already have an account. *@
+                <div class="small mt-1">
+                    <a href="@SignInInsteadLink">Sign in instead</a>
+                </div>
+            }
+        </div>
+        <div class="col-12">
+            <label for="phone" class="form-label">Phone number</label>
+            <InputText id="phone" type="tel" @bind-Value="Input!.PhoneNumber" class="form-control" autocomplete="tel" placeholder="+30 690 123 4567" />
+            <ValidationMessage For="() => Input!.PhoneNumber" class="invalid-feedback d-block" />
+        </div>
+        <div class="col-sm-6">
+            <label for="password" class="form-label">Password</label>
+            <InputText id="password" type="password" @bind-Value="Input!.Password" class="form-control" autocomplete="new-password" />
+            <ValidationMessage For="() => Input!.Password" class="invalid-feedback d-block" />
+        </div>
+        <div class="col-sm-6">
+            <label for="confirm-password" class="form-label">Confirm password</label>
+            <InputText id="confirm-password" type="password" @bind-Value="Input!.ConfirmPassword" class="form-control" autocomplete="new-password" />
+            <ValidationMessage For="() => Input!.ConfirmPassword" class="invalid-feedback d-block" />
+        </div>
+        <div class="col-12 form-text mt-1">At least 8 characters, with an upper-case letter, a lower-case letter and a digit.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100 mt-4">Create account</button>
+</EditForm>
+
+<p class="mt-4 mb-0 text-center">
+    Already have an account? <a href="@WithReturnUrl("account/login")">Sign in</a>
+</p>
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm] private RegisterViewModel? Input { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private EditContext editContext = default!;
+    // Messages the page adds itself, next to those of DataAnnotationsValidator (which keeps its own store).
+    private ValidationMessageStore serverErrors = default!;
+    private string? problem;
+    private bool emailTaken;
+
+    private string SignInInsteadLink => WithReturnUrl($"account/login?email={Uri.EscapeDataString(Input!.Email)}");
+
+    protected override void OnInitialized()
+    {
+        if (HttpMethods.IsGet(HttpContext.Request.Method) && HttpContext.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(LocalUrls.OrHome(ReturnUrl));
+        }
+        Input ??= new RegisterViewModel();
+        editContext = new EditContext(Input);
+        serverErrors = new ValidationMessageStore(editContext);
+    }
+
+    private async Task RegisterAsync()
+    {
+        var user = new ApplicationUser
+        {
+            UserName = Input!.Email.Trim(),
+            Email = Input.Email.Trim(),
+            FirstName = Input.FirstName.Trim(),
+            LastName = Input.LastName.Trim(),
+            PhoneNumber = Input.PhoneNumber.Trim(),
+        };
+
+        IdentityResult result = await Users.CreateAsync(user, Input.Password);
+        if (result.Succeeded)
+        {
+            await SignIn.SignInAsync(user, isPersistent: false);
+            Navigation.NavigateTo(LocalUrls.OrHome(ReturnUrl));
+            return;
+        }
+
+        // The user name is the email, so both duplicate errors mean the same thing: report it once, plainly, with a
+        // way to sign in. (This does tell people the email has an account; hiding that would need confirmation
+        // emails, which the app doesn't send yet. A deliberate choice, see the QA report, F8.)
+        if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
+        {
+            serverErrors.Add(() => Input.Email, "There's already an account with this email.");
+            emailTaken = true;
+        }
+        foreach (IdentityError error in result.Errors.Where(e => e.Code is not ("DuplicateEmail" or "DuplicateUserName")))
+        {
+            if (error.Code == "InvalidEmail")
+            {
+                serverErrors.Add(() => Input.Email, error.Description);
+            }
+            else if (error.Code.StartsWith("Password"))
+            {
+                serverErrors.Add(() => Input.Password, error.Description);
+            }
+            else
+            {
+                problem = error.Description;
+            }
+        }
+        editContext.NotifyValidationStateChanged();
+        ForgetPasswords();
+    }
+
+    // InputText writes the field's value into the page, password fields included: never send a password back.
+    private void ForgetPasswords()
+    {
+        Input!.Password = "";
+        Input.ConfirmPassword = "";
+    }
+
+    private string WithReturnUrl(string path) =>
+        string.IsNullOrEmpty(ReturnUrl) ? path : $"{path}{(path.Contains('?') ? '&' : '?')}returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+}

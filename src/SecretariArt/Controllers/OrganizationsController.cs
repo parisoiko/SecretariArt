@@ -50,7 +50,7 @@ public class OrganizationsController(IOrganizationService organizations, IMember
     {
         if (User.Identity?.IsAuthenticated != true)
         {
-            return RedirectToAction("Register", "Account", new { returnUrl = Url.Action(nameof(JoinWithCode), new { code }) });
+            return Redirect($"/account/register?returnUrl={Uri.EscapeDataString(Url.Action(nameof(JoinWithCode), new { code })!)}");
         }
 
         Organization? organization = await memberships.FindByInviteCodeAsync(code);

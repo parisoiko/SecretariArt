@@ -1,0 +1,31 @@
+@using SecretariArt.Extensions
+@inject FlashMessageService Flash
+
+@*
+    The messages left by the previous request (Extensions/FlashMessageService.cs), shown once: the Blazor version of
+    Views/Shared/_Messages.cshtml. "Message" confirms something that happened; "Problem" explains why nothing did, so
+    it must not look like success.
+*@
+@if (message != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="status">
+        <i class="bi bi-check-circle me-2" aria-hidden="true"></i>@message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (problem != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>@problem
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private string? message;
+    private string? problem;
+
+    protected override void OnInitialized() => (message, problem) = Flash.Take(HttpContext);
+}

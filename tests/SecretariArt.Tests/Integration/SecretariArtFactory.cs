@@ -135,7 +135,7 @@ public static class BrowserExtensions
     }
 
     public static Task<HttpResponseMessage> SignInAsync(this HttpClient client, string email, string password = DbInitializer.DemoPassword) =>
-        client.SubmitFormAsync("/account/login", "/account/login", new() { ["Email"] = email, ["Password"] = password });
+        client.SubmitFormAsync("/account/login", "/account/login", new() { ["Input.Email"] = email, ["Input.Password"] = password });
 
     // Registers a brand-new user (and signs them in). Returns their email.
     public static async Task<string> RegisterNewUserAsync(this HttpClient client, string firstName = "Anna")
@@ -143,12 +143,12 @@ public static class BrowserExtensions
         string email = $"{firstName.ToLowerInvariant()}.{Guid.NewGuid():N}@test.example";
         HttpResponseMessage response = await client.SubmitFormAsync("/account/register", "/account/register", new()
         {
-            ["FirstName"] = firstName,
-            ["LastName"] = "Tester",
-            ["Email"] = email,
-            ["PhoneNumber"] = "+30 690 000 0000",
-            ["Password"] = DbInitializer.DemoPassword,
-            ["ConfirmPassword"] = DbInitializer.DemoPassword,
+            ["Input.FirstName"] = firstName,
+            ["Input.LastName"] = "Tester",
+            ["Input.Email"] = email,
+            ["Input.PhoneNumber"] = "+30 690 000 0000",
+            ["Input.Password"] = DbInitializer.DemoPassword,
+            ["Input.ConfirmPassword"] = DbInitializer.DemoPassword,
         });
         // A new account belongs to no organisation yet: the welcome page.
         Assert.Contains($"Welcome, {firstName}", await response.Content.ReadAsStringAsync());

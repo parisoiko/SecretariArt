@@ -37,6 +37,7 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapSecretariArtHealthChecks();
+app.MapAccountEndpoints();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

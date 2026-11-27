@@ -185,7 +185,7 @@ public class AccountSelfServiceTests(SecretariArtFactory factory)
         var query = System.Web.HttpUtility.ParseQueryString(new Uri("http://localhost" + link).Query);
         return new()
         {
-            ["Email"] = query["email"]!, ["Code"] = query["code"]!, ["Password"] = password, ["ConfirmPassword"] = password,
+            ["Input.Email"] = query["email"]!, ["Input.Code"] = query["code"]!, ["Input.Password"] = password, ["Input.ConfirmPassword"] = password,
         };
     }
 

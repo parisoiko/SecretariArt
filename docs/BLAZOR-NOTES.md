@@ -14,6 +14,7 @@ has moved, and URLs never change.
 1. [Hosting Blazor next to MVC, and the first page](#1-hosting-blazor-next-to-mvc-and-the-first-page)
 2. [Layouts and navigation as components](#2-layouts-and-navigation-as-components)
 3. [The first form: Forgot your password?](#3-the-first-form-forgot-your-password)
+4. [Signing in and out](#4-signing-in-and-out)
 
 ---
 
@@ -207,3 +208,70 @@ the given fields. MVC and Blazor pages are tested the same way.
 
 **Try it:** open http://localhost:5100/account/forgot-password, post it empty, then with an address, and view the
 source at each stage.
+
+---
+
+## 4. Signing in and out
+
+**What moved:** sign in, registration and reset password became `Components/Pages/Account/Login.razor`,
+`Register.razor` and `ResetPassword.razor`. Sign-out became a small endpoint (`Extensions/AccountEndpoints.cs`).
+`AccountController` and its views are gone.
+
+### Why sign-in pages must be static
+Signing in writes the sign-in cookie into the response: `SignInManager.PasswordSignInAsync` sets a `Set-Cookie`
+header. With static rendering, a form's handler runs inside the HTTP request, before any of the page has been sent,
+so headers can still be written. That's why `SignInManager` is used exactly as the controller used it. An interactive
+component (from step 18) runs over a live connection after the page has loaded; there's no response left to put a
+cookie in. Blazor's own Identity template keeps its account pages static for the same reason.
+
+### Redirects: `NavigationManager.NavigateTo`
+`Navigation.NavigateTo("/")` replaces `return RedirectToAction(…)` and `LocalRedirect(…)`. During static rendering it
+stops the component (by throwing an exception that Blazor catches, so never wrap it in a `try/catch`), and Blazor
+answers with a 302. Its `Location` is absolute (`http://localhost/`), where MVC's was `/`; browsers don't mind.
+
+### `returnUrl` must stay inside the site (`Extensions/LocalUrls.cs`)
+`[SupplyParameterFromQuery] private string? ReturnUrl` reads `?returnUrl=…`. Because the form posts back to its own
+URL, query string included, the value is there on the POST too. Components have no `Url.IsLocalUrl`, so `LocalUrls`
+applies the same rule: `/path` yes, `//other-site` and `/\other-site` no.
+
+### Adding errors after validation: `EditContext` and `ValidationMessageStore`
+Some errors only appear after the form is valid: Identity refuses the email ("already an account") or the password
+rules. MVC's answer was `ModelState.AddModelError(field, message)`. Blazor's is:
+```csharp
+editContext = new EditContext(Input);                      // in OnInitialized
+serverErrors = new ValidationMessageStore(editContext);
+…
+serverErrors.Add(() => Input.Email, "There's already an account with this email.");
+editContext.NotifyValidationStateChanged();                // in the handler
+```
+The form then takes `EditContext="editContext"` instead of `Model="Input"`, and `<ValidationMessage For="() => Input.Email">`
+shows these messages beside the ones from `DataAnnotationsValidator`. Errors that belong to no field ("Wrong email or
+password") are a plain `problem` string shown as an alert, which is what MVC's `asp-validation-summary="ModelOnly"` did.
+
+### Passwords must never come back in the page
+`InputText` writes the field's current value into the HTML, and that includes `type="password"`. MVC's
+`<input asp-for="Password">` never wrote a password's value. So after a refused form (`OnInvalidSubmit`, or a failed
+sign-in) the pages clear the password fields before rendering. The test is `RefusedForms_NeverSendTheTypedPasswordBack`.
+
+### Messages across a redirect: `FlashMessageService` and `<FlashMessages />`
+"Your password has been changed" is set by the reset page and shown by the sign-in page after a redirect. MVC used
+`TempData["Message"]`. The new `FlashMessageService` keeps using TempData, under the same keys, so MVC and Blazor pages
+can pass messages to each other while both exist. One difference: MVC saves TempData after every action by itself,
+and outside MVC it has to be saved by hand (`tempData.Save()`). `<FlashMessages />` shows and removes them: it's in
+`MainLayout`, and on the sign-in page.
+
+### Sign-out as an endpoint (`MapPost`)
+Sign-out has nothing to show, so it isn't a component. It's a "minimal API" endpoint:
+`app.MapPost("/account/logout", async (HttpContext context, SignInManager<ApplicationUser> signIn) => …)`. It needs
+an anti-forgery check, so it's marked with `RequireAntiforgeryTokenAttribute`. `UseAntiforgery()` then checks the
+token, but for a plain endpoint it only *records* the result: Blazor pages and form binding refuse a bad token by
+themselves, and this handler has to look (`IAntiforgeryValidationFeature.IsValid`) and answer 400.
+
+### One mistake worth knowing
+I first wrote the labels as `<DisplayName For="() => Input.Email" />`, expecting a component that reads
+`[Display(Name = …)]`. Blazor has no such component. The compiler only warned ("Found markup element with unexpected
+name") and rendered it as an unknown, empty HTML element: the labels were blank, and the tests still passed. Treat
+Razor warnings (RZ10012) as errors. The labels are plain text now.
+
+**Try it:** sign in with a wrong password and view the source (the password field has no value). Then use "Forgot your
+password?", follow the link from `src/SecretariArt/App_Data/mail`, and see the message on the sign-in page.

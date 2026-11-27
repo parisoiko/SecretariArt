@@ -38,10 +38,10 @@ public class AccountTests(SecretariArtFactory factory)
     {
         var fields = new Dictionary<string, string>
         {
-            ["FirstName"] = "Petros", ["LastName"] = "Tester", ["Email"] = $"petros.{Guid.NewGuid():N}@test.example",
-            ["PhoneNumber"] = "+30 690 000 0000", ["Password"] = DbInitializer.DemoPassword, ["ConfirmPassword"] = DbInitializer.DemoPassword,
+            ["Input.FirstName"] = "Petros", ["Input.LastName"] = "Tester", ["Input.Email"] = $"petros.{Guid.NewGuid():N}@test.example",
+            ["Input.PhoneNumber"] = "+30 690 000 0000", ["Input.Password"] = DbInitializer.DemoPassword, ["Input.ConfirmPassword"] = DbInitializer.DemoPassword,
         };
-        fields[field] = value;
+        fields["Input." + field] = value;
 
         HttpResponseMessage response = await factory.CreateBrowser().SubmitFormAsync("/account/register", "/account/register", fields);
 
@@ -53,14 +53,14 @@ public class AccountTests(SecretariArtFactory factory)
     {
         HttpResponseMessage response = await factory.CreateBrowser().SubmitFormAsync("/account/register", "/account/register", new()
         {
-            ["FirstName"] = "Eleni", ["LastName"] = "Again", ["Email"] = "eleni@demo.secretariart.app",
-            ["PhoneNumber"] = "+30 690 000 0000", ["Password"] = DbInitializer.DemoPassword, ["ConfirmPassword"] = DbInitializer.DemoPassword,
+            ["Input.FirstName"] = "Eleni", ["Input.LastName"] = "Again", ["Input.Email"] = "eleni@demo.secretariart.app",
+            ["Input.PhoneNumber"] = "+30 690 000 0000", ["Input.Password"] = DbInitializer.DemoPassword, ["Input.ConfirmPassword"] = DbInitializer.DemoPassword,
         });
 
         string page = await response.Content.ReadAsStringAsync();
         Assert.Contains("There&#x27;s already an account with this email.", page);
         Assert.Contains("Sign in instead", page);
-        Assert.Contains("/account/login?email=eleni@demo.secretariart.app", page);
+        Assert.Contains("account/login?email=eleni%40demo.secretariart.app", page);
     }
 
     [Fact]
@@ -88,9 +88,29 @@ public class AccountTests(SecretariArtFactory factory)
         HttpResponseMessage response = await browser.SubmitFormAsync("/account/login",
             "/account/login?returnUrl=https%3A%2F%2Fevil.example", new()
             {
-                ["Email"] = "giorgos@demo.secretariart.app", ["Password"] = DbInitializer.DemoPassword,
+                ["Input.Email"] = "giorgos@demo.secretariart.app", ["Input.Password"] = DbInitializer.DemoPassword,
             });
 
-        Assert.Equal("/", response.Headers.Location!.ToString());
+        // Blazor's redirect is absolute: this site's home page, not evil.example.
+        Assert.Equal("http://localhost/", response.Headers.Location!.ToString());
+    }
+
+    // Blazor's InputText writes a field's value into the page, password fields included: the account pages clear the
+    // passwords before showing a refused form again, so a typed password never comes back in the HTML.
+    [Fact]
+    public async Task RefusedForms_NeverSendTheTypedPasswordBack()
+    {
+        const string typed = "Secret!Typed2026";
+        string signIn = await (await factory.CreateBrowser().SignInAsync("giorgos@demo.secretariart.app", typed)).Content.ReadAsStringAsync();
+        string register = await (await factory.CreateBrowser().SubmitFormAsync("/account/register", "/account/register", new()
+        {
+            ["Input.Email"] = "not-an-email", ["Input.Password"] = typed, ["Input.ConfirmPassword"] = typed,
+        })).Content.ReadAsStringAsync();
+
+        Assert.Contains("Wrong email or password.", signIn);
+        Assert.Contains("<label for=\"password\" class=\"form-label\">Password</label>", signIn);
+        Assert.DoesNotContain(typed, signIn);
+        Assert.Contains("Enter a valid email address", register);
+        Assert.DoesNotContain(typed, register);
     }
 }

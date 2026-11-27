@@ -48,7 +48,7 @@ public class RegisterLimitTests(RegisterLimitFactory factory) : IClassFixture<Re
     public async Task RegisteringManyAccountsFromOneAddress_IsStopped()
     {
         HttpClient browser = factory.CreateBrowser();
-        var empty = new Dictionary<string, string> { ["FirstName"] = "", ["Email"] = "" };
+        var empty = new Dictionary<string, string> { ["Input.FirstName"] = "", ["Input.Email"] = "" };
 
         Assert.Equal(HttpStatusCode.OK, (await browser.SubmitFormAsync("/account/register", "/account/register", empty)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.SubmitFormAsync("/account/register", "/account/register", empty)).StatusCode);

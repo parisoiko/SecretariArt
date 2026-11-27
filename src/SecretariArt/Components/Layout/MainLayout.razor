@@ -28,9 +28,9 @@
                     <li><a class="dropdown-item" href="organizations/request"><i class="bi bi-building-add me-2" aria-hidden="true"></i>Register an organisation</a></li>
                     <li><hr class="dropdown-divider" /></li>
                     <li>
-                        @* A plain HTML form posting to the MVC sign-out action (it moves in step 4). <AntiforgeryToken />
-                           writes the same hidden token MVC's forms carry, so MVC's check accepts it. data-enhance="false":
-                           a normal post, not one Blazor intercepts, since an MVC action answers it. *@
+                        @* A plain HTML form posting to the sign-out endpoint (Extensions/AccountEndpoints.cs). <AntiforgeryToken />
+                           writes the hidden token the endpoint checks. data-enhance="false": a normal post, not one
+                           Blazor intercepts, since no Blazor page answers it. *@
                         <form action="account/logout" method="post" data-enhance="false">
                             <AntiforgeryToken />
                             <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>Sign out</button>
@@ -43,6 +43,7 @@
 </nav>
 
 <main class="container py-4" id="content" tabindex="-1">
+    <FlashMessages />
     @Body
 </main>
 
