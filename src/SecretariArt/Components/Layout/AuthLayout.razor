@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+@*
+    The layout for people who aren't signed in (sign-in, registration, password pages, and error pages for visitors):
+    the Blazor version of Views/Shared/_AuthLayout.cshtml. A layout is a component that inherits LayoutComponentBase;
+    the page is rendered where @Body is.
+*@
+<div class="auth-screen">
+    <main class="auth-panel">
+        <div class="auth-intro">
+            <a class="auth-brand" href="/" aria-label="SecretariArt home"><Logo /></a>
+            <h1>The front office for schools of the arts.</h1>
+            <p>Schedules, classrooms, teachers' availability and students' payments, in one place, for drama schools,
+               conservatoires, dance studios and ateliers.</p>
+        </div>
+        <div class="auth-card">
+            @Body
+        </div>
+    </main>
+</div>

@@ -83,6 +83,9 @@ public static class ServiceCollectionExtensions
         services.AddAntiforgery(options => options.SuppressXFrameOptionsHeader = true);
         services.AddScoped<ICurrentUserMemberships, CurrentUserMemberships>();
 
+        // Blazor components, rendered on the server (static SSR) for now.
+        services.AddRazorComponents();
+
         services.AddControllersWithViews(options =>
         {
             options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());

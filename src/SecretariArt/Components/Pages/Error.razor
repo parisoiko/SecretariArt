@@ -1,0 +1,57 @@
+@page "/error/{StatusCode:int}"
+@attribute [AllowAnonymous]
+@layout AuthLayout
+@using SecretariArt.Extensions
+
+@*
+    The friendly page for 403, 404, 429 and 500, reached by re-executing the failed request (Program.cs,
+    UseSecretariArtErrorPages). Replaces ErrorController and Views/Error/Show.cshtml.
+*@
+
+<PageTitle>@info.Title · SecretariArt</PageTitle>
+
+<div class="empty-state">
+    <i class="bi @info.Icon" aria-hidden="true"></i>
+    <h1>@info.Heading</h1>
+    <p>@info.Text</p>
+    <a class="btn btn-primary" href="/">Back to home</a>
+</div>
+
+@code {
+    // From the route: /error/{StatusCode}. A route parameter is a [Parameter] with the same name.
+    [Parameter] public int StatusCode { get; set; }
+
+    // Static server rendering runs inside an HTTP request, and Blazor hands that request to any component that asks.
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private (string Title, string Icon, string Heading, string Text) info;
+
+    protected override void OnInitialized()
+    {
+        HttpContext.Response.StatusCode = StatusCode;
+
+        // 429: a rate limit (Extensions/RateLimiting.cs) said how long to wait. Re-executing for this page can drop
+        // the limiter's header, so it's set again.
+        int? retryAfter = HttpContext.Items[RateLimitPolicies.RetryAfterItem] as int?;
+        if (retryAfter is int seconds)
+        {
+            HttpContext.Response.Headers.RetryAfter = seconds.ToString();
+        }
+        string wait = retryAfter switch
+        {
+            null or <= 60 => "a minute",
+            < 3600 => $"{(retryAfter + 59) / 60} minutes",
+            _ => "an hour",
+        };
+
+        info = StatusCode switch
+        {
+            404 => ("Not found", "bi-signpost-split", "We couldn't find that page", "Check the address, or start again from the home page."),
+            403 => ("Something went wrong", "bi-exclamation-triangle", "You don't have access to this page", "Check the address, or start again from the home page."),
+            429 => ("Too many attempts", "bi-hourglass-split", "Too many attempts",
+                    $"To keep accounts safe, there's a limit on how often this can be tried. Please wait {wait} and try again."),
+            500 => ("Something went wrong", "bi-exclamation-triangle", "Something went wrong", "Please try again in a moment."),
+            _ => ("Something went wrong", "bi-exclamation-triangle", "Something went wrong", "Check the address, or start again from the home page."),
+        };
+    }
+}

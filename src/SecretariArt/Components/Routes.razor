@@ -1,0 +1,9 @@
+@*
+    The router: finds the component whose @page matches the URL and renders it inside its layout. Only URLs that a
+    component claims reach it; every other URL is still served by the MVC controllers (see Program.cs).
+*@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(AuthLayout)" />
+    </Found>
+</Router>
