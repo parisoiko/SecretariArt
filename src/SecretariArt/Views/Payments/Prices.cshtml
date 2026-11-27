@@ -8,7 +8,7 @@
     CoursePricing[] options = [CoursePricing.NotSet, CoursePricing.Monthly, CoursePricing.PerClass];
 }
 
-<partial name="_AdminHeader" model="@("payments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "payments"; }
 <partial name="_PaymentsNav" model="@("prices")" />
 
 <p class="text-muted">

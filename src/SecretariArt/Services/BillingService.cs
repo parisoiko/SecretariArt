@@ -119,15 +119,18 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         }
 
         // Classes checked in to in months that are over. A course covered by a priced bundle isn't charged per class.
-        var bookings = await db.Bookings.Include(b => b.Session).ThenInclude(s => s!.Group).ThenInclude(g => g!.Course)
-            .Where(b => b.OrganizationId == organizationId && b.ChargeId == null && b.Date < month &&
-                        b.Session!.Group!.Course!.Pricing == CoursePricing.PerClass && (studentId == null || b.StudentId == studentId))
-            .ToListAsync();
+        // By the course on the check-in, so a class taken off the timetable since is still billed.
+        var perClassCourses = await db.Courses.AsNoTracking()
+            .Where(c => c.OrganizationId == organizationId && c.Pricing == CoursePricing.PerClass).ToDictionaryAsync(c => c.Id);
+        var bookings = (await db.Bookings
+                .Where(b => b.OrganizationId == organizationId && b.ChargeId == null && b.Date < month && (studentId == null || b.StudentId == studentId))
+                .ToListAsync())
+            .Where(b => perClassCourses.ContainsKey(b.CourseId)).ToList();
         var perClass = new List<(Charge Charge, List<Booking> Bookings)>();
-        foreach (var group in bookings.GroupBy(b => (b.StudentId, CourseId: b.Session!.Group!.CourseId, Month: b.Date.FirstOfMonth())))
+        foreach (var group in bookings.GroupBy(b => (b.StudentId, b.CourseId, Month: b.Date.FirstOfMonth())))
         {
-            var (student, _, billedMonth) = group.Key;
-            Course course = group.First().Session!.Group!.Course!;
+            var (student, courseId, billedMonth) = group.Key;
+            Course course = perClassCourses[courseId];
             var billable = group.Where(b => BookingService.Billable(b, settings)).ToList();
             string key = $"P:{course.Id}:{student}:{billedMonth:yyyy-MM}";
             if (billable.Count == 0 || course.Price <= 0 || bundled.ContainsKey((student, course.Id)) || !keys.Add(key))
@@ -572,15 +575,16 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
 
         // This month's check-ins up to today, priced as they would be billed (QA, P9: not next month's).
         var bundled = BundleCoverage(enrolments, await SettledCourseFeesAsync(organizationId, student.Id, month), out _).ToDictionary(b => b.Key.CourseId, b => b.Value);
-        var bookings = await db.Bookings.AsNoTracking().Include(b => b.Session).ThenInclude(s => s!.Group).ThenInclude(g => g!.Course)
-            .Where(b => b.OrganizationId == organizationId && b.StudentId == student.Id && b.Date >= month && b.Date <= today && b.ChargeId == null &&
-                        b.Session!.Group!.Course!.Pricing == CoursePricing.PerClass)
+        var perClassCourses = await db.Courses.AsNoTracking()
+            .Where(c => c.OrganizationId == organizationId && c.Pricing == CoursePricing.PerClass).ToDictionaryAsync(c => c.Id);
+        var bookings = await db.Bookings.AsNoTracking()
+            .Where(b => b.OrganizationId == organizationId && b.StudentId == student.Id && b.Date >= month && b.Date <= today && b.ChargeId == null)
             .ToListAsync();
-        var soFar = bookings.Where(b => BookingService.Billable(b, settings) && !bundled.ContainsKey(b.Session!.Group!.CourseId))
-            .GroupBy(b => b.Session!.Group!.CourseId)
+        var soFar = bookings.Where(b => perClassCourses.ContainsKey(b.CourseId) && BookingService.Billable(b, settings) && !bundled.ContainsKey(b.CourseId))
+            .GroupBy(b => b.CourseId)
             .Select(g =>
             {
-                Course course = g.First().Session!.Group!.Course!;
+                Course course = perClassCourses[g.Key];
                 decimal amount = course.Price * g.Count();
                 var (discount, _) = ApplyDiscounts(amount, Applicable(discounts, student.Id, course.Id, null));
                 return new ClassesSoFar(course, g.Count(), amount - discount);

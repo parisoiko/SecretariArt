@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using SecretariArt.Models;
+using SecretariArt.Services;
 
 namespace SecretariArt.ViewModels;
 
@@ -44,6 +45,14 @@ public class HomeViewModel
 
     // Organisation id → join requests waiting for this user's decision (only organisations they administer).
     public required IReadOnlyDictionary<int, int> PendingJoinRequests { get; init; }
+
+    // "Needs your attention": the join requests themselves, newest first, in the organisations this person runs.
+    public IReadOnlyList<Membership> JoinRequests { get; init; } = [];
+
+    // "Coming up": today's classes (taught or attended) and payments due soon or overdue.
+    public DateOnly Today { get; init; }
+    public IReadOnlyList<PersonalSession> TodaysClasses { get; init; } = [];
+    public IReadOnlyList<Charge> PaymentsDue { get; init; } = [];
 
     // Only for platform admins: organisation requests waiting for a decision.
     public int? PlatformRequestsWaiting { get; init; }

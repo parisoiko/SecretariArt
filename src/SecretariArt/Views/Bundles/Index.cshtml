@@ -4,7 +4,7 @@
     ViewData["Title"] = $"Bundles · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("bundles")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "bundles"; }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <p class="text-muted mb-0">Sets of courses taken together, such as a year of a programme. Enrol a student in a bundle to give them all its courses at once.</p>

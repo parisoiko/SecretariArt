@@ -1,0 +1,23 @@
+@model (bool Rejected, string? Reason, string Waiting)
+@if (Model.Rejected)
+{
+    <details class="request-status">
+        <summary>
+            <span class="status-dot-pill"><span class="dot rejected" aria-hidden="true"></span>Not approved</span>
+            @if (Model.Reason != null)
+            {
+                <span class="see-why">See why</span>
+            }
+        </summary>
+        @if (Model.Reason != null)
+        {
+            <p class="request-reason">Reason: “@Model.Reason”</p>
+        }
+    </details>
+}
+else
+{
+    <div class="request-status">
+        <span class="status-dot-pill"><span class="dot" aria-hidden="true"></span>@Model.Waiting</span>
+    </div>
+}

@@ -1,0 +1,41 @@
+@inject ICurrentUserMemberships CurrentMemberships
+@*
+    On administration pages: the organisation being run, and the others this person administers, opening on the same
+    section there.
+*@
+@{
+    var current = (Organization)ViewData["Organization"]!;
+    string tab = ViewData["AdminTab"] as string ?? "members";
+    (string Controller, string Action) target = tab switch
+    {
+        "enrolments" => ("Enrolments", "Index"), "rules" => ("Rules", "Edit"), "classrooms" => ("Classrooms", "Index"),
+        "courses" => ("Courses", "Index"), "bundles" => ("Bundles", "Index"), "schedule" => ("Schedule", "Index"),
+        "payments" => ("Payments", "Index"), _ => ("Administration", "Members"),
+    };
+    var others = (await CurrentMemberships.GetAsync())
+        .Where(m => m.Role == MembershipRole.Admin && m.Status == MembershipStatus.Active &&
+                    m.Organization!.Status == OrganizationStatus.Active && m.OrganizationId != current.Id)
+        .Select(m => m.Organization!).DistinctBy(o => o.Id).OrderBy(o => o.Name).ToList();
+}
+<div class="dropdown org-switcher">
+    <button class="btn org-switcher-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+            aria-label="Organisation: @current.Name. Switch organisation">
+        <i class="bi bi-building" aria-hidden="true"></i>
+        <span class="org-switcher-name" lang="@current.Name.Language()">@current.Name</span>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text small text-muted">You're running</span></li>
+        <li><span class="dropdown-item active" aria-current="true" lang="@current.Name.Language()">@current.Name</span></li>
+        @if (others.Count > 0)
+        {
+            <li><hr class="dropdown-divider" /></li>
+            <li><span class="dropdown-item-text small text-muted">Switch to</span></li>
+            @foreach (var other in others)
+            {
+                <li><a class="dropdown-item" lang="@other.Name.Language()" asp-controller="@target.Controller" asp-action="@target.Action" asp-route-organizationId="@other.Id">@other.Name</a></li>
+            }
+        }
+        <li><hr class="dropdown-divider" /></li>
+        <li><a class="dropdown-item" asp-controller="Home" asp-action="Index"><i class="bi bi-house me-2" aria-hidden="true"></i>All your organisations</a></li>
+    </ul>
+</div>

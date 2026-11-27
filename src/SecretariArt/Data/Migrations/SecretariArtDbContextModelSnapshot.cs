@@ -250,6 +250,9 @@ namespace SecretariArt.Data.Migrations
                     b.Property<int?>("ChargeId")
                         .HasColumnType("int");
 
+                    b.Property<int>("CourseId")
+                        .HasColumnType("int");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
@@ -259,7 +262,7 @@ namespace SecretariArt.Data.Migrations
                     b.Property<int>("OrganizationId")
                         .HasColumnType("int");
 
-                    b.Property<int>("SessionId")
+                    b.Property<int?>("SessionId")
                         .HasColumnType("int");
 
                     b.Property<string>("StudentId")
@@ -270,10 +273,13 @@ namespace SecretariArt.Data.Migrations
 
                     b.HasIndex("StudentId");
 
+                    b.HasIndex("OrganizationId", "CourseId");
+
                     b.HasIndex("OrganizationId", "Date");
 
                     b.HasIndex("SessionId", "Date", "StudentId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[SessionId] IS NOT NULL");
 
                     b.ToTable("Bookings");
                 });
@@ -625,6 +631,70 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("Discounts");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.DraftGap", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DraftId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Missing")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId");
+
+                    b.ToTable("DraftGaps");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.DraftSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClassroomId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Day")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("DraftId")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("Ends")
+                        .HasColumnType("time");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("Starts")
+                        .HasColumnType("time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftId");
+
+                    b.ToTable("DraftSessions");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
                 {
                     b.Property<int>("Id")
@@ -962,6 +1032,42 @@ namespace SecretariArt.Data.Migrations
                     b.ToTable("PaymentSettings");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.ScheduleDraft", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedById")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Milliseconds")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("Optimal")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrganizationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.ToTable("ScheduleDrafts");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.StudentDiscount", b =>
                 {
                     b.Property<int>("Id")
@@ -1103,8 +1209,7 @@ namespace SecretariArt.Data.Migrations
                     b.HasOne("SecretariArt.Models.ClassSession", "Session")
                         .WithMany()
                         .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("SecretariArt.Models.ApplicationUser", "Student")
                         .WithMany()
@@ -1255,6 +1360,28 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.DraftGap", b =>
+                {
+                    b.HasOne("SecretariArt.Models.ScheduleDraft", "Draft")
+                        .WithMany("Gaps")
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.DraftSession", b =>
+                {
+                    b.HasOne("SecretariArt.Models.ScheduleDraft", "Draft")
+                        .WithMany("Sessions")
+                        .HasForeignKey("DraftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Draft");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.Enrolment", b =>
                 {
                     b.HasOne("SecretariArt.Models.Bundle", "Bundle")
@@ -1377,6 +1504,17 @@ namespace SecretariArt.Data.Migrations
                     b.Navigation("Organization");
                 });
 
+            modelBuilder.Entity("SecretariArt.Models.ScheduleDraft", b =>
+                {
+                    b.HasOne("SecretariArt.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("SecretariArt.Models.StudentDiscount", b =>
                 {
                     b.HasOne("SecretariArt.Models.Bundle", "Bundle")
@@ -1462,6 +1600,13 @@ namespace SecretariArt.Data.Migrations
             modelBuilder.Entity("SecretariArt.Models.Organization", b =>
                 {
                     b.Navigation("Memberships");
+                });
+
+            modelBuilder.Entity("SecretariArt.Models.ScheduleDraft", b =>
+                {
+                    b.Navigation("Gaps");
+
+                    b.Navigation("Sessions");
                 });
 #pragma warning restore 612, 618
         }

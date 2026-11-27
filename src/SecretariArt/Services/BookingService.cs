@@ -103,7 +103,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         {
             db.Bookings.Add(new Booking
             {
-                OrganizationId = session.OrganizationId, SessionId = sessionId, Date = date, StudentId = studentId,
+                OrganizationId = session.OrganizationId, SessionId = sessionId, CourseId = session.Group.CourseId, Date = date, StudentId = studentId,
                 BookedAt = clock.GetUtcNow().UtcDateTime,
             });
         }
@@ -132,7 +132,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
     {
         Booking? booking = await db.Bookings.Include(b => b.Session).ThenInclude(s => s!.Group).ThenInclude(g => g!.Course)
             .FirstOrDefaultAsync(b => b.Id == bookingId && b.StudentId == studentId && b.CancelledAt == null);
-        if (booking == null)
+        if (booking?.Session == null)
         {
             return ServiceResult.Fail("That check-in doesn't exist or was already cancelled.");
         }
@@ -199,7 +199,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
     public async Task<ServiceResult> SetNoShowAsync(int organizationId, int bookingId, bool noShow, string? teacherId)
     {
         Booking? booking = await db.Bookings.Include(b => b.Student).Include(b => b.Session).ThenInclude(s => s!.Group)
-            .FirstOrDefaultAsync(b => b.Id == bookingId && b.OrganizationId == organizationId && b.CancelledAt == null &&
+            .FirstOrDefaultAsync(b => b.Id == bookingId && b.OrganizationId == organizationId && b.CancelledAt == null && b.Session != null &&
                                       (teacherId == null || b.Session!.Group!.TeacherId == teacherId));
         if (booking == null)
         {
@@ -225,6 +225,39 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         var ids = organizationIds.Distinct().ToList();
         var saved = await db.PaymentSettings.AsNoTracking().Where(s => ids.Contains(s.OrganizationId)).ToDictionaryAsync(s => s.OrganizationId);
         return ids.ToDictionary(id => id, id => saved.GetValueOrDefault(id) ?? new PaymentSettings { OrganizationId = id });
+    }
+
+    // When weekly classes come off the timetable or move: their upcoming check-ins are for a class that won't happen
+    // (or not then), so they're cancelled and each student is told. Past ones stay: they may still be billed. The
+    // caller saves; returns how many were cancelled.
+    public static async Task<int> CancelUpcomingAsync(
+        SecretariArtDbContext db, INotificationService? notifications, TimeProvider clock, IReadOnlyCollection<int> sessionIds, string why,
+        string? studentId = null)
+    {
+        if (sessionIds.Count == 0)
+        {
+            return 0;
+        }
+        DateTime now = clock.SchoolNow();
+        DateOnly today = DateOnly.FromDateTime(now);
+        var upcoming = (await db.Bookings.Include(b => b.Session).ThenInclude(s => s!.Group).ThenInclude(g => g!.Course)
+                .Where(b => b.SessionId != null && sessionIds.Contains(b.SessionId.Value) && b.CancelledAt == null && b.Date >= today &&
+                            (studentId == null || b.StudentId == studentId))
+                .ToListAsync())
+            .Where(b => b.Date.ToDateTime(b.Session!.Starts) > now)
+            .ToList();
+        var organizationIds = upcoming.Select(b => b.OrganizationId).Distinct().ToList();
+        var names = await db.Organizations.Where(o => organizationIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Name);
+        foreach (Booking booking in upcoming)
+        {
+            ClassSession session = booking.Session!;
+            notifications?.Add([booking.StudentId], session.OrganizationId,
+                $"{names[session.OrganizationId]}: Your check-in to {session.Group!.Course!.Name} on {DisplayNames.LongDate(booking.Date)} at {session.Starts:HH:mm} " +
+                $"was cancelled because {why}. You won't be billed for it: check in to another class on your Schedule.",
+                "/schedule?tab=book");
+        }
+        db.Bookings.RemoveRange(upcoming);
+        return upcoming.Count;
     }
 
     // ---- Helpers ----
@@ -257,7 +290,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         var rules = await db.OrganizationRules.AsNoTracking().Where(r => organizationIds.Contains(r.OrganizationId)).ToDictionaryAsync(r => r.OrganizationId);
         var sessionIds = sessions.Select(s => s.Id).ToList();
         var bookings = await db.Bookings.AsNoTracking()
-            .Where(b => sessionIds.Contains(b.SessionId) && b.Date >= from && b.Date <= to)
+            .Where(b => b.SessionId != null && sessionIds.Contains(b.SessionId.Value) && b.Date >= from && b.Date <= to)
             .ToListAsync();
 
         var result = new List<ClassDate>();

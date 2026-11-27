@@ -19,7 +19,7 @@
         };
 }
 
-<partial name="_AdminHeader" model="@("payments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "payments"; }
 
 <a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> Books</a>
 

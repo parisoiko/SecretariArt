@@ -236,6 +236,63 @@ organisation's term aren't billed, so look at the term dates you set in round 12
 - Double-submitting Record payment doesn't record it twice past the balance.
 - Every new page at 390×844: the record-payment and change forms open in place and are usable.
 
+### Milestone 5: automatic timetable generation (rounds 20–23)
+Also new since milestone 4: a **redesign** (new header and logo, admin sections in a sidebar, new Home, Members and
+Rules pages) and **rate limits** (the QA app runs with them raised, so they won't get in your way).
+
+The admin's Schedule tab has **Generate a timetable** (`/admin/{orgId}/schedule/generate`):
+- **Fill the gaps** keeps every class already in the timetable and places only what each group is missing;
+- **Start over** plans the whole week again.
+
+The generator (Google OR-Tools) makes a **draft** (`/admin/{orgId}/schedule/draft`): the week grid with new classes
+marked "New:", what it couldn't place and why, and notes on new classes. Nothing changes until the admin chooses
+**Use this timetable** (or "Add these N classes") or **Discard**. Using it checks the draft again against the timetable as
+it is then. A draft that no longer fits is refused. One notification per person lists their classes.
+
+What it must always keep to (the editor's refusals): the Rules (days, hours, start-time step), room features and size
+(for enrolled students), the room changeover time, and no teacher, group or student in two places at once (also a
+teacher teaching at another organisation in overlapping terms). What it should avoid when it can (the editor's notes),
+most important first: times outside a teacher's availability, the daily teaching-hours limit, a room smaller than the
+group's places, a group twice on one day, starts that aren't on the hour, students with a class at another organisation
+then, and an uneven week. A lower one gives way to a higher one.
+
+Also changed: removing or moving a class (by hand, by deleting its group or course, or by a "Start over" draft) now
+cancels **upcoming check-ins** to it and tells each student. Past check-ins stay and are still billed. Unenrolling a
+student, or moving them to another group, cancels their upcoming check-ins in the old group.
+
+20. **Fill the gaps.** In an organisation with some groups short of classes (add a group or a course if none is), generate
+    with Fill the gaps. Check:
+    - kept classes don't move, and only the missing ones are added;
+    - every new class keeps every rule above: open each one's details on the Schedule tab after using the draft, and
+      try to add the same class by hand somewhere it clashes;
+    - a group's classes land on different days when possible, inside teachers' availability when posted;
+    - what couldn't be placed is listed with a reason that makes sense (e.g. a course needing a feature no room has);
+    - using it adds the classes, and the teachers and students get one notification each.
+21. **Start over.** In another organisation, generate with Start over, look at the draft, then:
+    - discard it: the timetable is unchanged;
+    - generate again and use it: the old classes are replaced, people are told, and the Schedule tab shows no clashes
+      (notes are fine);
+    - in an organisation with per-class courses and upcoming check-ins, check the students get the cancellation
+      notification and their check-ins are gone from "Check in to classes", while last month's still show on Payments.
+22. **Stale drafts and edges.**
+    - Generate a draft, then (in another tab, or before using it) add a class by hand where the draft puts one, or delete
+      a classroom or group the draft uses: using the draft is refused with the reason.
+    - An organisation with no classrooms, or no groups: generating says what's missing.
+    - Fill the gaps when every group is complete: says so.
+    - Double-click Generate: one draft, not two; generating again replaces the draft.
+    - Cross-organisation: a teacher (`multi-n` or one teaching at two organisations) is never given a time they teach
+      elsewhere in overlapping terms.
+23. **The redesign.** Walk the new Home (with and without organisations, as an admin, a teacher and a student), the
+    organisation switcher on admin pages, the sidebar (and its scrolling row on a phone), Members (invite bar, copy
+    link, role filters, search, turned down recently) and Rules (day toggles, the "In short" summary). Check
+    the logo and the browser-tab icon at desktop and phone width.
+
+**Milestone 5 probes:**
+- An admin of A opens or posts to `/admin/{B}/schedule/generate`, `/draft`, `/draft/use`, `/draft/discard`: denied.
+- Teachers and students open the generate and draft pages: denied.
+- Generating with a large organisation (many groups) finishes within about 20 seconds and says how long it took.
+- Every draft page at 390×844.
+
 ## Probes (in every round, wherever they apply)
 - **Access control:** a student or teacher opens `/admin/{orgId}/members`; an admin of A opens
   `/admin/{orgIdOfB}/members` and tries to approve someone there; a non-platform user opens
@@ -284,10 +341,13 @@ Add these sections:
 - **Charges and payments** you recorded (student, what, amount, paid, method), waived charges, one-off charges.
 - **Check-ins**: student, class, date, cancelled (in time or late), marked as not there.
 
+## Ledger for milestone 5
+Add a **Generated drafts** section: organisation, mode, when, classes placed and not placed, used or discarded; and the
+classes each used draft put in the timetable (replace that organisation's Timetable section). Note cancelled check-ins.
+
 ## Retesting
 Before starting new rounds, retest the open findings in the latest run report and mark each one fixed or still
 open. N1 (long emails breaking mid-word on a phone) is known and left as it is.
 
 ## Future milestones (to extend as features land)
-Automatic timetable generation doesn't exist yet. Don't go looking for it. If you find a link to
-something unfinished, note it in the report.
+Milestone 6 (polish) is next. If you find a link to something unfinished, note it in the report.

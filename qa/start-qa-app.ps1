@@ -4,8 +4,10 @@
     with no demo data and its own platform admin. The dev app (:5100) and its database are not touched.
 .PARAMETER Reset
     Drops SecretariArt_QA first, so the tester starts from an empty site.
+.PARAMETER RealRateLimits
+    Keeps the production rate limits (by default they are raised so the tester is never slowed down).
 #>
-param([switch]$Reset)
+param([switch]$Reset, [switch]$RealRateLimits)
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -31,6 +33,13 @@ $env:PlatformAdmin__Email = 'qa-platform@test.secretariart.app'
 $env:PlatformAdmin__Password = 'QaTest!2026'
 $env:PlatformAdmin__FirstName = 'QA'
 $env:PlatformAdmin__LastName = 'Platform'
+# The tester works from one address and creates many accounts: rate limits stay on (same code as production) but high
+# enough never to get in its way. Pass -RealRateLimits to test with the production limits instead.
+if (-not $RealRateLimits) {
+    foreach ($limit in 'Global', 'SignIn', 'Register', 'InviteCodes', 'OrganizationRequests', 'Generation') {
+        Set-Item "env:RateLimits__${limit}__PermitLimit" 100000
+    }
+}
 
 Write-Host "QA app on http://localhost:5200 (database $database). Ctrl+C to stop."
 dotnet (Join-Path $out 'SecretariArt.dll') --contentRoot (Join-Path $repo 'src/SecretariArt') --urls http://localhost:5200

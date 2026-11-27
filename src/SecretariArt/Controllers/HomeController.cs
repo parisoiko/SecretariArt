@@ -9,7 +9,8 @@ using SecretariArt.ViewModels;
 
 namespace SecretariArt.Controllers;
 
-public class HomeController(ICurrentUserMemberships currentMemberships, SecretariArtDbContext db) : Controller
+public class HomeController(
+    ICurrentUserMemberships currentMemberships, SecretariArtDbContext db, IScheduleService schedule, TimeProvider clock) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -45,9 +46,29 @@ public class HomeController(ICurrentUserMemberships currentMemberships, Secretar
             ? await db.Organizations.CountAsync(o => o.Status == OrganizationStatus.Pending)
             : null;
 
+        // The requests themselves, for "Needs your attention" (the counts above drive the organisation cards).
+        List<Membership> joinRequests = await db.Memberships.AsNoTracking().Include(m => m.User).Include(m => m.Organization)
+            .Where(m => adminOf.Contains(m.OrganizationId) && m.Status == MembershipStatus.Pending)
+            .OrderByDescending(m => m.RequestedAt).Take(10).ToListAsync();
+
+        // "Coming up": today's classes, and payments due in the next two weeks or already overdue. In memory: SQLite (the
+        // tests) can't compare decimals, and one person's charges are few.
+        DateOnly today = clock.SchoolToday();
+        UserRoles roles = await currentMemberships.GetRolesAsync();
+        var todaysClasses = roles.IsTeacher || roles.IsStudent
+            ? (await schedule.GetPersonalAsync(userId)).Where(p => p.Session.Day == today.DayOfWeek).OrderBy(p => p.Session.Starts).ToList()
+            : [];
+        var paymentsDue = (await db.Charges.AsNoTracking().Include(c => c.Payments).Include(c => c.Organization)
+                .Where(c => c.StudentId == userId && c.CancelledAt == null && c.DueOn <= today.AddDays(14)).ToListAsync())
+            .Where(c => c.Balance > 0).OrderBy(c => c.DueOn).ToList();
+
         return View(new HomeViewModel
         {
             PlatformRequestsWaiting = platformRequestsWaiting,
+            JoinRequests = joinRequests,
+            Today = today,
+            TodaysClasses = todaysClasses,
+            PaymentsDue = paymentsDue,
             FirstName = User.FindFirstValue(ClaimTypes.GivenName) ?? "",
             Memberships = memberships,
             OrganizationRequests = requests,

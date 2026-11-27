@@ -2,116 +2,201 @@
 @{
     var organization = (Organization)ViewData["Organization"]!;
     ViewData["Title"] = $"Rules · {organization.Name}";
+    Layout = "_AdminLayout";
+    ViewData["AdminTab"] = "rules";
+    ViewData["Intro"] = "The limits every timetable here keeps to. Courses are checked against them now, and the schedule is built within them.";
+
+    string Slot(int minutes) => minutes switch
+    {
+        15 => "the quarter hour", 30 => "the half hour", 60 => "the hour", _ => $"every {minutes} minutes",
+    };
 }
 
-<partial name="_AdminHeader" model="@("rules")" />
-
-<div class="narrow-wide">
-    <p class="text-muted">
-        The limits every timetable here keeps to. Courses are checked against them now; the schedule will be built
-        within them.
+<form asp-action="Edit" asp-route-organizationId="@organization.Id" method="post" class="rules-layout" novalidate>
+    <div class="rules-sections">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-0"></div>
         @if (!Model.Saved)
         {
-            <strong>These are suggested defaults; nothing is saved yet.</strong>
+            <div class="note-amber">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <p class="mb-0">These are suggested defaults; nothing is saved yet. Check them and save.</p>
+            </div>
         }
-        else if (Model.UpdatedAt is DateTime updated)
-        {
-            <span>Last saved @updated.ToLocalTime().ToString("d MMM yyyy, HH:mm").</span>
-        }
-    </p>
 
-    <form asp-action="Edit" asp-route-organizationId="@organization.Id" method="post" class="form-card" novalidate>
-        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
-
-        <fieldset class="mb-4">
-            <legend class="section-title">When teaching happens</legend>
-            <div class="mb-3">
-                <span class="form-label d-block">Teaching days</span>
-                <div class="check-grid days">
+        <section class="panel panel-pad" aria-labelledby="when">
+            <div class="panel-intro">
+                <h2 id="when">When teaching happens</h2>
+                <p>No class is placed outside these days and hours.</p>
+            </div>
+            <fieldset>
+                <legend class="form-label">Teaching days</legend>
+                <div class="day-toggles">
                     @foreach (var day in DisplayNames.AllDays)
                     {
-                        <label class="check-chip">
-                            <input type="checkbox" name="Days" value="@day" checked="@Model.Days.Contains(day)" />
+                        <label class="day-toggle">
+                            <input type="checkbox" name="Days" value="@day" checked="@Model.Days.Contains(day)" data-day="@day.ToString()[..3]" />
                             <span>@day.ToString()[..3]</span>
                         </label>
                     }
                 </div>
                 <span asp-validation-for="Days" class="invalid-feedback d-block"></span>
-            </div>
-            <div class="row g-3">
-                <div class="col-sm-4">
-                    <label asp-for="DayStarts" class="form-label"></label>
+            </fieldset>
+            <div class="field-grid three">
+                <div>
+                    <label asp-for="DayStarts" class="form-label">Day starts</label>
                     <input asp-for="DayStarts" type="time" asp-format="{0:HH:mm}" class="form-control" />
                     <span asp-validation-for="DayStarts" class="invalid-feedback d-block"></span>
                 </div>
-                <div class="col-sm-4">
-                    <label asp-for="DayEnds" class="form-label"></label>
+                <div>
+                    <label asp-for="DayEnds" class="form-label">Day ends</label>
                     <input asp-for="DayEnds" type="time" asp-format="{0:HH:mm}" class="form-control" />
                     <span asp-validation-for="DayEnds" class="invalid-feedback d-block"></span>
                 </div>
-                <div class="col-sm-4">
-                    <label asp-for="SlotMinutes" class="form-label"></label>
+                <div>
+                    <label asp-for="SlotMinutes" class="form-label">Classes start on</label>
                     <select asp-for="SlotMinutes" class="form-select"
-                            asp-items="@OrganizationRulesDefaults.SlotChoices.Select(m => new SelectListItem($"{m} minutes", m.ToString()))"></select>
+                            asp-items="@OrganizationRulesDefaults.SlotChoices.Select(m => new SelectListItem(Slot(m), m.ToString()))"></select>
                     <span asp-validation-for="SlotMinutes" class="invalid-feedback d-block"></span>
                 </div>
             </div>
-        </fieldset>
+            <div class="day-bar" aria-hidden="true">
+                <div class="day-bar-track"><div class="day-bar-fill"></div></div>
+                <div class="day-bar-scale"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+            </div>
+        </section>
 
-        <fieldset class="mb-4">
-            <legend class="section-title">Sessions</legend>
-            <div class="row g-3">
-                <div class="col-sm-6">
-                    <label asp-for="MinSessionMinutes" class="form-label"></label>
-                    <input asp-for="MinSessionMinutes" type="number" class="form-control" />
+        <section class="panel panel-pad" aria-labelledby="sessions">
+            <div class="panel-intro">
+                <h2 id="sessions">Sessions</h2>
+                <p>How long classes run and how often a course meets.</p>
+            </div>
+            <div class="field-grid two">
+                <fieldset>
+                    <legend class="form-label">Session length</legend>
+                    <div class="range-inputs">
+                        <div class="input-group">
+                            <input asp-for="MinSessionMinutes" type="number" class="form-control" aria-label="Shortest session, in minutes" />
+                            <span class="input-group-text">min</span>
+                        </div>
+                        <span class="text-muted">to</span>
+                        <div class="input-group">
+                            <input asp-for="MaxSessionMinutes" type="number" class="form-control" aria-label="Longest session, in minutes" />
+                            <span class="input-group-text">min</span>
+                        </div>
+                    </div>
                     <span asp-validation-for="MinSessionMinutes" class="invalid-feedback d-block"></span>
-                </div>
-                <div class="col-sm-6">
-                    <label asp-for="MaxSessionMinutes" class="form-label"></label>
-                    <input asp-for="MaxSessionMinutes" type="number" class="form-control" />
                     <span asp-validation-for="MaxSessionMinutes" class="invalid-feedback d-block"></span>
-                </div>
-                <div class="col-sm-6">
-                    <label asp-for="MinSessionsPerWeek" class="form-label"></label>
-                    <input asp-for="MinSessionsPerWeek" type="number" class="form-control" />
+                </fieldset>
+                <fieldset>
+                    <legend class="form-label">Sessions per course, each week</legend>
+                    <div class="range-inputs">
+                        <input asp-for="MinSessionsPerWeek" type="number" class="form-control" aria-label="Fewest sessions a week" />
+                        <span class="text-muted">to</span>
+                        <input asp-for="MaxSessionsPerWeek" type="number" class="form-control" aria-label="Most sessions a week" />
+                    </div>
                     <span asp-validation-for="MinSessionsPerWeek" class="invalid-feedback d-block"></span>
-                </div>
-                <div class="col-sm-6">
-                    <label asp-for="MaxSessionsPerWeek" class="form-label"></label>
-                    <input asp-for="MaxSessionsPerWeek" type="number" class="form-control" />
                     <span asp-validation-for="MaxSessionsPerWeek" class="invalid-feedback d-block"></span>
-                </div>
-                <div class="col-sm-6">
-                    <label asp-for="BreakBetweenSessionsMinutes" class="form-label"></label>
-                    <input asp-for="BreakBetweenSessionsMinutes" type="number" class="form-control" />
+                </fieldset>
+                <div>
+                    <label asp-for="BreakBetweenSessionsMinutes" class="form-label">Break between classes in a room</label>
+                    <div class="input-group">
+                        <input asp-for="BreakBetweenSessionsMinutes" type="number" class="form-control" />
+                        <span class="input-group-text">min</span>
+                    </div>
+                    <div class="form-text">Time to clear and set up the room.</div>
                     <span asp-validation-for="BreakBetweenSessionsMinutes" class="invalid-feedback d-block"></span>
                 </div>
-                <div class="col-sm-6">
-                    <label asp-for="MaxTeachingHoursPerDay" class="form-label"></label>
-                    <input asp-for="MaxTeachingHoursPerDay" type="number" class="form-control" />
+                <div>
+                    <label asp-for="MaxTeachingHoursPerDay" class="form-label">Teaching per teacher, per day <span class="text-muted fw-normal">· optional</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">up to</span>
+                        <input asp-for="MaxTeachingHoursPerDay" type="number" class="form-control" />
+                        <span class="input-group-text">hours</span>
+                    </div>
                     <span asp-validation-for="MaxTeachingHoursPerDay" class="invalid-feedback d-block"></span>
                 </div>
             </div>
-        </fieldset>
+        </section>
 
-        <fieldset class="mb-4">
-            <legend class="section-title">Term</legend>
-            <div class="row g-3">
-                <div class="col-sm-6">
-                    <label asp-for="TermStarts" class="form-label"></label>
+        <section class="panel panel-pad" aria-labelledby="term">
+            <div class="panel-intro">
+                <h2 id="term">Term <span class="optional">· optional</span></h2>
+                <p>Leave empty if you teach all year round.</p>
+            </div>
+            <div class="field-grid two">
+                <div>
+                    <label asp-for="TermStarts" class="form-label">Starts</label>
                     <input asp-for="TermStarts" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" />
                     <span asp-validation-for="TermStarts" class="invalid-feedback d-block"></span>
                 </div>
-                <div class="col-sm-6">
-                    <label asp-for="TermEnds" class="form-label"></label>
+                <div>
+                    <label asp-for="TermEnds" class="form-label">Ends</label>
                     <input asp-for="TermEnds" type="date" asp-format="{0:yyyy-MM-dd}" class="form-control" />
                     <span asp-validation-for="TermEnds" class="invalid-feedback d-block"></span>
                 </div>
             </div>
-        </fieldset>
+        </section>
+    </div>
 
-        <button type="submit" class="btn btn-primary">Save rules</button>
-    </form>
-</div>
+    <aside class="panel panel-pad rules-summary" aria-labelledby="summary">
+        <h2 id="summary">In short</h2>
+        @* Filled in by the script below as the form changes; the server's version is there without scripts. *@
+        <ul class="summary-list" aria-live="polite">
+            <li><i class="bi bi-calendar3" aria-hidden="true"></i><span data-summary="days">Classes <strong>@Model.Days.Aggregate(TeachingDays.None, (a, d) => a | d).Display()</strong>, @Model.DayStarts?.ToString("HH:mm") to @Model.DayEnds?.ToString("HH:mm")</span></li>
+            <li><i class="bi bi-clock" aria-hidden="true"></i><span data-summary="length">Each class lasts <strong>@DisplayNames.Minutes(Model.MinSessionMinutes ?? 0) to @DisplayNames.Minutes(Model.MaxSessionMinutes ?? 0)</strong> and starts on @Slot(Model.SlotMinutes ?? 15)</span></li>
+            <li><i class="bi bi-journal" aria-hidden="true"></i><span data-summary="week">A course meets <strong>@Model.MinSessionsPerWeek to @Model.MaxSessionsPerWeek times</strong> a week</span></li>
+            <li><i class="bi bi-door-open" aria-hidden="true"></i><span data-summary="break"><strong>@Model.BreakBetweenSessionsMinutes min</strong> free in a room between classes</span></li>
+            <li><i class="bi bi-person" aria-hidden="true"></i><span data-summary="hours">@(Model.MaxTeachingHoursPerDay is int h ? $"No teacher teaches more than {h} h a day" : "No daily limit on teaching hours")</span></li>
+            <li><i class="bi bi-arrow-right" aria-hidden="true"></i><span data-summary="term">@(Model.TermStarts is DateOnly s && Model.TermEnds is DateOnly e ? $"Term runs {s:d MMM yyyy} to {e:d MMM yyyy}" : "No term dates: all year round")</span></li>
+        </ul>
+        <div class="summary-save">
+            <button type="submit" class="btn btn-primary w-100">Save rules</button>
+            @if (Model.Saved && Model.UpdatedAt is DateTime updated)
+            {
+                <p>Last saved @updated.ToLocalTime().ToString("d MMM yyyy, HH:mm")</p>
+            }
+            else
+            {
+                <p>Not saved yet</p>
+            }
+        </div>
+    </aside>
+</form>
 
-@section Scripts { <partial name="_ValidationScripts" /> }
+@section Scripts {
+    <partial name="_ValidationScripts" />
+    <script>
+        // The summary and the day bar follow the form as it's filled in.
+        (() => {
+            const form = document.querySelector('.rules-layout');
+            const value = name => form.elements[name]?.value ?? '';
+            const minutes = m => { m = +m; const h = Math.floor(m / 60), r = m % 60; return h === 0 ? `${r} min` : r === 0 ? `${h} h` : `${h} h ${r} min`; };
+            const date = d => d ? new Date(d + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+            const set = (key, html) => form.querySelector(`[data-summary="${key}"]`).innerHTML = html;
+            const days = () => {
+                const all = [...form.querySelectorAll('input[name="Days"]')];
+                const on = all.map(d => d.checked);
+                const picked = all.filter(d => d.checked).map(d => d.dataset.day);
+                const first = on.indexOf(true), last = on.lastIndexOf(true);
+                if (picked.length === 0) return 'on no days yet';
+                return picked.length > 2 && on.slice(first, last + 1).every(Boolean) ? `${all[first].dataset.day} to ${all[last].dataset.day}` : picked.join(', ');
+            };
+            const toMinutes = t => { const [h, m] = (t || '0:0').split(':').map(Number); return h * 60 + m; };
+            const update = () => {
+                const slot = form.elements['SlotMinutes'];
+                set('days', `Classes <strong>${days()}</strong>, ${value('DayStarts')} to ${value('DayEnds')}`);
+                set('length', `Each class lasts <strong>${minutes(value('MinSessionMinutes'))} to ${minutes(value('MaxSessionMinutes'))}</strong> and starts on ${slot.options[slot.selectedIndex].text}`);
+                set('week', `A course meets <strong>${value('MinSessionsPerWeek')} to ${value('MaxSessionsPerWeek')} times</strong> a week`);
+                set('break', `<strong>${value('BreakBetweenSessionsMinutes') || 0} min</strong> free in a room between classes`);
+                set('hours', value('MaxTeachingHoursPerDay') ? `No teacher teaches more than <strong>${value('MaxTeachingHoursPerDay')} h</strong> a day` : 'No daily limit on teaching hours');
+                set('term', value('TermStarts') && value('TermEnds') ? `Term runs <strong>${date(value('TermStarts'))} to ${date(value('TermEnds'))}</strong>` : 'No term dates: all year round');
+                const fill = form.querySelector('.day-bar-fill'), from = toMinutes(value('DayStarts')), to = toMinutes(value('DayEnds'));
+                fill.style.left = `${from / 14.4}%`;
+                fill.style.width = `${Math.max(0, to - from) / 14.4}%`;
+            };
+            form.addEventListener('input', update);
+            form.addEventListener('change', update);
+            update();
+        })();
+    </script>
+}

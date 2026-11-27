@@ -1,0 +1,29 @@
+@model SecretariArt.ViewComponents.AdminSidebarModel
+<nav class="admin-nav" aria-label="Administration">
+    <div class="admin-nav-org">
+        <p class="eyebrow">Administration</p>
+        <p class="admin-nav-name" lang="@Model.Organization.Name.Language()">@Model.Organization.Name</p>
+    </div>
+    @foreach (var group in Model.Groups)
+    {
+        <div class="admin-nav-group">
+            <p class="admin-nav-label">@group.Group</p>
+            @foreach (var link in group.Links)
+            {
+                bool current = link.Key == Model.Active;
+                <a class="admin-nav-link @(current ? "active" : "")" aria-current="@(current ? "page" : null)"
+                   asp-controller="@link.Controller" asp-action="@link.Action" asp-route-organizationId="@Model.Organization.Id">
+                    @link.Label
+                    @if (link.Badge > 0)
+                    {
+                        <span class="count-badge" aria-label="@link.Badge waiting">@link.Badge</span>
+                    }
+                </a>
+            }
+        </div>
+    }
+</nav>
+<script>
+    // On a phone the sections become one row that scrolls sideways: bring the current one into view.
+    document.querySelector('.admin-nav-link.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+</script>

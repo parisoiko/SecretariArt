@@ -89,8 +89,13 @@ public class Booking
     public int Id { get; set; }
     public int OrganizationId { get; set; }
 
-    public int SessionId { get; set; }
+    // Null once the weekly class has come off the timetable: the check-in stays, because it may still be billed.
+    public int? SessionId { get; set; }
     public ClassSession? Session { get; set; }
+
+    // The course it bills, kept here so billing works whatever happens to the class (milestone 5 fix). A plain id,
+    // like Charge.CourseId: a check-in of a course deleted since is simply not billed.
+    public int CourseId { get; set; }
 
     public DateOnly Date { get; set; }
 

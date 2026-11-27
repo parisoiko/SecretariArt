@@ -44,10 +44,10 @@ else
                     @foreach (var (block, lane, lanes) in placed.Where(p => p.Block.Day == day))
                     {
                         string css = $"week-block tone-{block.Tone % 6}{(block.Alert != null ? " clash" : block.Note != null ? " note" : "")}" +
-                                     ((block.Ends - block.Starts).TotalMinutes switch { < 60 => " short", < 90 => " medium", _ => "" });
+                                     ((block.Ends - block.Starts).TotalMinutes switch { < 60 => " short", < 90 => " medium", < 120 => " compact", _ => "" });
                         string style = $"top: {Top(block.Starts)}; height: {Height(block)}; left: calc({lane} * 100% / {lanes}); width: calc(100% / {lanes} - 3px);";
                         string tip = $"{block.Title}, {block.Day} {block.Starts:HH:mm}–{block.Ends:HH:mm}" +
-                                     (block.Line2 != null ? $", {block.Line2}" : "") + (block.Alert != null ? $". {block.Alert}" : "") + (block.Note != null ? $". {block.Note}" : "");
+                                     (block.Line2 != null ? $", {block.Line2}" : "") + (block.Line3 != null ? $", {block.Line3}" : "") + (block.Alert != null ? $". {block.Alert}" : "") + (block.Note != null ? $". {block.Note}" : "");
                         if (block.Url != null)
                         {
                             <a class="@css" style="@style" href="@block.Url" title="@tip">

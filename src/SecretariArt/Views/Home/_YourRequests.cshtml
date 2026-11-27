@@ -1,0 +1,29 @@
+@model HomeViewModel
+@* Requests this person sent: to join an organisation, or to register one. A refusal shows its reason on demand. *@
+@{
+    var waiting = Model.Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
+}
+<section class="panel panel-pad your-requests" aria-labelledby="requests">
+    <h2 id="requests">Your requests</h2>
+    <p class="text-muted small">Organisations you asked to join or register.</p>
+    <ul class="request-cards">
+        @foreach (var membership in waiting)
+        {
+            bool rejected = membership.Status == MembershipStatus.Rejected;
+            <li class="request-card">
+                <span class="request-card-name" lang="@membership.Organization!.Name.Language()" title="@membership.Organization.Name">@membership.Organization.Name</span>
+                <p class="request-card-meta">Join as a @membership.Role.ToString().ToLowerInvariant() · sent @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
+                <partial name="_RequestStatus" model="@((rejected, membership.RejectionReason, "Waiting for approval"))" />
+            </li>
+        }
+        @foreach (var request in Model.OrganizationRequests)
+        {
+            bool rejected = request.Status == OrganizationStatus.Rejected;
+            <li class="request-card">
+                <span class="request-card-name" lang="@request.Name.Language()" title="@request.Name">@request.Name</span>
+                <p class="request-card-meta">New organisation · sent @request.RequestedAt.ToLocalTime().ToString("d MMM")</p>
+                <partial name="_RequestStatus" model="@((rejected, request.RejectionReason, "Under review"))" />
+            </li>
+        }
+    </ul>
+</section>

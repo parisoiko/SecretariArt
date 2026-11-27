@@ -4,7 +4,7 @@
     ViewData["Title"] = $"Enrolments · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("enrolments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "enrolments"; }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <p class="text-muted mb-0">Every approved student and the courses they take. Open a student to enrol them in a course or a whole bundle.</p>

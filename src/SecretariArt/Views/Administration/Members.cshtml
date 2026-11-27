@@ -1,166 +1,229 @@
 @model MembersViewModel
+@using System.Security.Claims
 @{
     ViewData["Title"] = $"Members · {Model.Organization.Name}";
-}
+    Layout = "_AdminLayout";
+    ViewData["AdminTab"] = "members";
+    ViewData["Intro"] = "Everyone who teaches or studies here, and people asking to join.";
+    string? me = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-<partial name="_AdminHeader" model="@("members")" />
-
-@if (!Model.Setup.IsComplete)
-{
-    int organizationId = Model.Organization.Id;
-    (bool Done, string Label, string Controller, string Action)[] steps =
-    [
-        (Model.Setup.RulesSaved, "Set your timetabling rules", "Rules", "Edit"),
-        (Model.Setup.HasClassrooms, "Add your classrooms", "Classrooms", "Index"),
-        (Model.Setup.HasCourseWithGroup, "Add a course with a group", "Courses", "Index"),
-        (Model.Setup.HasStudents, "Invite and approve students (below)", "Administration", "Members"),
-        (Model.Setup.HasEnrolments, "Enrol students", "Enrolments", "Index"),
-    ];
-    <section class="setup-card mb-4" aria-labelledby="setup-title">
-        <h2 class="section-title" id="setup-title">Getting started <span class="text-muted small">@steps.Count(s => s.Done) of @steps.Length done</span></h2>
-        <ol class="setup-steps">
-            @foreach (var step in steps)
-            {
-                <li class="@(step.Done ? "done" : "")">
-                    <i class="bi @(step.Done ? "bi-check-circle-fill" : "bi-circle")" aria-hidden="true"></i>
-                    @if (step.Done)
-                    {
-                        <span>@step.Label <span class="visually-hidden">(done)</span></span>
-                    }
-                    else
-                    {
-                        <a asp-controller="@step.Controller" asp-action="@step.Action" asp-route-organizationId="@organizationId">@step.Label</a>
-                    }
-                </li>
-            }
-        </ol>
-    </section>
-}
-
-<section class="invite-panel mb-4">
-    <div>
-        <h2 class="section-title mb-1">Invite people</h2>
-        <p class="text-muted mb-2">Share the code or the link. People who use it ask to join, and appear below for you to approve.</p>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="invite-code">@Model.Organization.InviteCode</span>
-            <input class="form-control invite-link" value="@Model.InviteLink" readonly aria-label="Invite link" onclick="this.select()" />
-        </div>
-    </div>
-    <form asp-action="RegenerateInviteCode" asp-route-organizationId="@Model.Organization.Id" method="post"
-          onsubmit="return confirm('Make a new code? The current code and link will stop working.');">
-        <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> New code</button>
-    </form>
-</section>
-
-<section class="mb-4">
-    <h2 class="section-title">Waiting for approval <span class="badge text-bg-warning">@Model.Pending.Count</span></h2>
-    @if (Model.Pending.Count == 0)
-    {
-        <p class="text-muted">No one is waiting.</p>
-    }
-    else
-    {
-        <div class="table-responsive table-card">
-            <table class="table align-middle mb-0 table-stack">
-                <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Asked</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var membership in Model.Pending)
-                    {
-                        string role = membership.Role.ToString().ToLowerInvariant();
-                        <tr>
-                            <td data-label="Name">
-                                <strong>@membership.User!.FullName</strong>
-                                @if (membership.LastRejectedAt is DateTime rejectedAt)
-                                {
-                                    @* They asked again after being turned down: say so, so the admin decides knowingly. *@
-                                    <div class="text-danger small">
-                                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Rejected before, on @rejectedAt.ToLocalTime().ToString("d MMM yyyy")@(membership.RejectionReason is string reason ? $": {reason}" : "")
-                                    </div>
-                                }
-                            </td>
-                            <td data-label="Role"><span class="role-badge role-@role">@membership.Role</span></td>
-                            <td data-label="Contact">@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
-                            <td data-label="Asked" class="text-nowrap">@membership.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</td>
-                            <td class="text-end text-nowrap table-actions">
-                                <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
-                                    <button class="btn btn-sm btn-success"><i class="bi bi-check-lg" aria-hidden="true"></i> Approve</button>
-                                </form>
-                                @* A page of its own: it names the person and asks for the reason they'll see. *@
-                                <a class="btn btn-sm btn-outline-danger" asp-action="Reject" asp-route-organizationId="@Model.Organization.Id"
-                                   asp-route-membershipId="@membership.Id"><i class="bi bi-x-lg" aria-hidden="true"></i> Reject</a>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</section>
-
-@{
     // One row per person, with a badge for each role they hold here.
     var people = Model.Active
         .GroupBy(m => m.UserId)
         .OrderBy(g => g.Min(m => m.Role)).ThenBy(g => g.First().User!.LastName).ThenBy(g => g.First().User!.FirstName)
         .ToList();
+    int CountWith(MembershipRole role) => people.Count(p => p.Any(m => m.Role == role));
 }
-<section class="mb-4">
-    <h2 class="section-title">Members <span class="badge text-bg-secondary">@people.Count</span></h2>
-    <div class="table-responsive table-card">
-        <table class="table align-middle mb-0 table-stack">
-            <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr></thead>
-            <tbody>
-                @foreach (var person in people)
-                {
-                    ApplicationUser user = person.First().User!;
-                    <tr>
-                        <td data-label="Name">@user.FullName</td>
-                        <td data-label="Role">
-                            @foreach (var membership in person.OrderBy(m => m.Role))
-                            {
-                                <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
-                            }
-                        </td>
-                        <td data-label="Email">@user.Email</td>
-                        <td data-label="Phone">@user.PhoneNumber</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</section>
 
-@if (Model.Rejected.Count > 0)
-{
-    <section>
-        <h2 class="section-title">Not approved</h2>
-        <p class="text-muted">The most recent requests you rejected. Approve one if it was a mistake.</p>
-        <div class="table-responsive table-card">
-            <table class="table align-middle mb-0 table-stack">
-                <thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Rejected</th><th></th></tr></thead>
+@section HeadingAside {
+    <div class="invite-bar">
+        <span class="invite-bar-label">Invite code</span>
+        <span class="invite-bar-code">@Model.Organization.InviteCode</span>
+        <button type="button" class="btn btn-primary btn-sm invite-copy" data-link="@Model.InviteLink">
+            <i class="bi bi-link-45deg" aria-hidden="true"></i> <span>Copy invite link</span>
+        </button>
+        <form asp-action="RegenerateInviteCode" asp-route-organizationId="@Model.Organization.Id" method="post"
+              data-confirm="Make a new code? The current code and link will stop working.">
+            <button class="btn btn-outline-secondary btn-sm invite-new" aria-label="Make a new invite code" title="Make a new invite code">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+            </button>
+        </form>
+    </div>
+}
+
+<div class="page-stack">
+    @if (!Model.Setup.IsComplete)
+    {
+        int organizationId = Model.Organization.Id;
+        (bool Done, string Label, string Controller, string Action)[] steps =
+        [
+            (Model.Setup.RulesSaved, "Set your timetabling rules", "Rules", "Edit"),
+            (Model.Setup.HasClassrooms, "Add your classrooms", "Classrooms", "Index"),
+            (Model.Setup.HasCourseWithGroup, "Add a course with a group", "Courses", "Index"),
+            (Model.Setup.HasStudents, "Invite and approve students (below)", "Administration", "Members"),
+            (Model.Setup.HasEnrolments, "Enrol students", "Enrolments", "Index"),
+        ];
+        <section class="setup-card" aria-labelledby="setup-title">
+            <h2 class="section-title" id="setup-title">Getting started <span class="text-muted small">@steps.Count(s => s.Done) of @steps.Length done</span></h2>
+            <ol class="setup-steps">
+                @foreach (var step in steps)
+                {
+                    <li class="@(step.Done ? "done" : "")">
+                        <i class="bi @(step.Done ? "bi-check-circle-fill" : "bi-circle")" aria-hidden="true"></i>
+                        @if (step.Done)
+                        {
+                            <span>@step.Label <span class="visually-hidden">(done)</span></span>
+                        }
+                        else
+                        {
+                            <a asp-controller="@step.Controller" asp-action="@step.Action" asp-route-organizationId="@organizationId">@step.Label</a>
+                        }
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+
+    <section class="panel" aria-labelledby="waiting">
+        <div class="panel-head">
+            <h2 id="waiting">Waiting for approval</h2>
+            @if (Model.Pending.Count > 0)
+            {
+                <span class="count-badge">@Model.Pending.Count</span>
+            }
+        </div>
+        @if (Model.Pending.Count == 0)
+        {
+            <p class="panel-body text-muted mb-0">No one is waiting. People who use your invite code or link appear here for you to approve.</p>
+        }
+        @foreach (var membership in Model.Pending)
+        {
+            ApplicationUser user = membership.User!;
+            string role = membership.Role.ToString().ToLowerInvariant();
+            <div class="request-row">
+                <div class="request-main">
+                    <span class="avatar avatar-lg" aria-hidden="true">@user.Initials</span>
+                    <div class="request-who">
+                        <p class="mb-0 fw-semibold"><span lang="@user.FullName.Language()">@user.FullName</span> <span class="role-badge role-@role ms-1">@membership.Role</span></p>
+                        <p class="request-meta">@user.Email@(user.PhoneNumber != null ? $" · {user.PhoneNumber}" : "") · asked @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
+                    </div>
+                    <div class="request-actions">
+                        @* A page of its own: it names the person and asks for the reason they'll see. *@
+                        <a class="btn btn-outline-secondary" asp-action="Reject" asp-route-organizationId="@Model.Organization.Id"
+                           asp-route-membershipId="@membership.Id" aria-label="Reject @user.FullName">Reject</a>
+                        <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post">
+                            <button class="btn btn-primary" aria-label="Approve @user.FullName">Approve</button>
+                        </form>
+                    </div>
+                </div>
+                @if (membership.LastRejectedAt is DateTime rejectedAt)
+                {
+                    @* They asked again after being turned down: say so, so the admin decides knowingly. *@
+                    <div class="note-amber request-note">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <div>
+                            <p class="mb-0 fw-semibold">You turned down a request from them on @rejectedAt.ToLocalTime().ToString("d MMM yyyy")</p>
+                            @if (membership.RejectionReason is string reason)
+                            {
+                                <p class="mb-0">Reason: “@reason”</p>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="panel" aria-labelledby="people">
+        <div class="panel-head flex-wrap">
+            <h2 id="people">People</h2>
+            <div class="segmented" role="group" aria-label="Show">
+                <button type="button" aria-pressed="true" data-role="">All @people.Count</button>
+                <button type="button" aria-pressed="false" data-role="admin">Admins @CountWith(MembershipRole.Admin)</button>
+                <button type="button" aria-pressed="false" data-role="teacher">Teachers @CountWith(MembershipRole.Teacher)</button>
+                <button type="button" aria-pressed="false" data-role="student">Students @CountWith(MembershipRole.Student)</button>
+            </div>
+            <div class="flex-grow-1"></div>
+            <label class="search-box">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <span class="visually-hidden">Search people</span>
+                <input type="search" class="people-search" placeholder="Search by name, email or phone" />
+            </label>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 table-stack people-table">
+                <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Contact</th></tr></thead>
                 <tbody>
-                    @foreach (var membership in Model.Rejected)
+                    @foreach (var person in people)
                     {
-                        <tr>
+                        ApplicationUser user = person.First().User!;
+                        var roles = person.OrderBy(m => m.Role).Select(m => m.Role.ToString().ToLowerInvariant()).ToList();
+                        <tr data-roles="@string.Join(" ", roles)" data-name="@TextMatch.Key($"{user.FullName} {user.Email} {user.PhoneNumber}")">
                             <td data-label="Name">
-                                @membership.User!.FullName
-                                @if (membership.RejectionReason != null)
+                                <span class="person">
+                                    <span class="avatar" aria-hidden="true">@user.Initials</span>
+                                    <span class="fw-medium" lang="@user.FullName.Language()">@user.FullName@(user.Id == me ? " (you)" : "")</span>
+                                </span>
+                            </td>
+                            <td data-label="Role">
+                                @foreach (var membership in person.OrderBy(m => m.Role))
                                 {
-                                    <div class="text-muted small">@membership.RejectionReason</div>
+                                    <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
                                 }
                             </td>
-                            <td data-label="Role"><span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span></td>
-                            <td data-label="Contact">@membership.User.Email<div class="text-muted small">@membership.User.PhoneNumber</div></td>
-                            <td data-label="Rejected" class="text-nowrap">@membership.DecidedAt?.ToLocalTime().ToString("d MMM yyyy")</td>
-                            <td class="text-end text-nowrap table-actions">
-                                <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post" class="d-inline">
-                                    <button class="btn btn-sm btn-outline-success"><i class="bi bi-check-lg" aria-hidden="true"></i> Approve after all</button>
-                                </form>
-                            </td>
+                            <td data-label="Contact">@user.Email<div class="text-muted small">@user.PhoneNumber</div></td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+        <p class="panel-body text-muted mb-0 people-none" hidden>No one matches.</p>
     </section>
+
+    @if (Model.Rejected.Count > 0)
+    {
+        <details class="panel turned-down">
+            <summary class="panel-head">
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                <span class="fw-semibold">Turned down recently</span>
+                <span class="text-muted small">@DisplayNames.Plural(Model.Rejected.Count, "request") · approve one if it was a mistake</span>
+            </summary>
+            @foreach (var membership in Model.Rejected)
+            {
+                ApplicationUser user = membership.User!;
+                <div class="turned-down-row">
+                    <div class="turned-down-who">
+                        <span class="fw-medium" lang="@user.FullName.Language()">@user.FullName</span>
+                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                        @if (membership.RejectionReason != null)
+                        {
+                            <div class="text-muted small">Reason: “@membership.RejectionReason”</div>
+                        }
+                    </div>
+                    <span class="text-muted">@user.Email</span>
+                    <span class="text-muted text-nowrap">@membership.DecidedAt?.ToLocalTime().ToString("d MMM")</span>
+                    <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post">
+                        <button class="btn btn-outline-secondary btn-sm" aria-label="Approve @user.FullName after all">Approve after all</button>
+                    </form>
+                </div>
+            }
+        </details>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // Copy the invite link to share it; say so on the button for a moment.
+        document.querySelector('.invite-copy')?.addEventListener('click', async e => {
+            const button = e.currentTarget, label = button.querySelector('span');
+            try {
+                await navigator.clipboard.writeText(button.dataset.link);
+                label.textContent = 'Link copied';
+            } catch {
+                window.prompt('Copy this invite link:', button.dataset.link);
+            }
+            setTimeout(() => label.textContent = 'Copy invite link', 2000);
+        });
+
+        // Narrow the people list by role and by name, email or phone (ignoring case and accents, like the server).
+        const rows = [...document.querySelectorAll('.people-table tbody tr')];
+        const search = document.querySelector('.people-search');
+        let role = '';
+        const key = text => text.trim().normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase().replace(/ς/g, 'σ');
+        const apply = () => {
+            const term = key(search.value);
+            let shown = 0;
+            rows.forEach(row => {
+                row.hidden = !(role === '' || row.dataset.roles.split(' ').includes(role)) || !row.dataset.name.includes(term);
+                if (!row.hidden) shown++;
+            });
+            document.querySelector('.people-none').hidden = shown > 0;
+        };
+        document.querySelectorAll('.segmented button').forEach(button => button.addEventListener('click', () => {
+            document.querySelectorAll('.segmented button').forEach(b => b.setAttribute('aria-pressed', b === button));
+            role = button.dataset.role;
+            apply();
+        }));
+        search.addEventListener('input', apply);
+    </script>
 }

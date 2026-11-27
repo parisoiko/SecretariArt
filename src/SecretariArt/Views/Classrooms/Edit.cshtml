@@ -6,7 +6,7 @@
     var floors = Enum.GetValues<FloorType>().Select(f => new SelectListItem(f.Display(), f.ToString()));
 }
 
-<partial name="_AdminHeader" model="@("classrooms")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "classrooms"; }
 
 <div class="narrow">
     <h2 class="section-title">@heading</h2>

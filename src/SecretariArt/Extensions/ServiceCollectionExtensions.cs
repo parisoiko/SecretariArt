@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IScheduleService, ScheduleService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
+        services.AddScoped<ITimetableDraftService, TimetableDraftService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IPaymentSetupService, PaymentSetupService>();

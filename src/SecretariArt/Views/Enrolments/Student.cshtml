@@ -8,7 +8,7 @@
     int weeklyMinutes = Model.Student.Enrolments.Sum(e => e.Course!.SessionMinutes * e.Course.SessionsPerWeek);
 }
 
-<partial name="_AdminHeader" model="@("enrolments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "enrolments"; }
 
 <a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All students</a>
 

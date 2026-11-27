@@ -13,4 +13,6 @@
 </span>
 @if (Model.Line2 != null) { <span class="wb-line">@Model.Line2</span> }
 @if (Model.Line3 != null) { <span class="wb-line">@Model.Line3</span> }
+@* Under 90 minutes there's room for one detail line: the calendar's choice (Compact), or the first line (QA, G6). *@
+<span class="wb-line wb-both">@(Model.Compact ?? Model.Line2)</span>
 @if (Model.Alert != null) { <span class="visually-hidden">@Model.Alert</span> }

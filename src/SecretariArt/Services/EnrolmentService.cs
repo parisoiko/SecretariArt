@@ -17,7 +17,8 @@ public interface IEnrolmentService
     Task<ServiceResult> UnenrolAsync(int organizationId, int enrolmentId);
 }
 
-public class EnrolmentService(SecretariArtDbContext db, IMembershipService memberships, TimeProvider clock) : IEnrolmentService
+public class EnrolmentService(
+    SecretariArtDbContext db, IMembershipService memberships, TimeProvider clock, INotificationService? notifications = null) : IEnrolmentService
 {
     public async Task<List<StudentEnrolments>> GetStudentsAsync(int organizationId)
     {
@@ -75,6 +76,7 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
         if (current != null)
         {
             string from = current.Group!.Name;
+            await CancelCheckInsAsync(current, $"you moved to group {group.Name}");
             current.GroupId = groupId;
             await db.SaveChangesAsync();
             return ServiceResult.Ok($"{name} moved from group {from} to group {group.Name} of {group.Course!.Name}.");
@@ -236,9 +238,17 @@ public class EnrolmentService(SecretariArtDbContext db, IMembershipService membe
             return ServiceResult.Fail("We couldn't find that enrolment.");
         }
 
+        await CancelCheckInsAsync(enrolment, $"you're no longer enrolled in {enrolment.Course!.Name}");
         db.Enrolments.Remove(enrolment);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"{enrolment.Student!.FullName} is no longer enrolled in {enrolment.Course!.Name} (group {enrolment.Group!.Name}).");
+    }
+
+    // Leaving a group (or moving to another) cancels the student's upcoming check-ins to its classes.
+    private async Task CancelCheckInsAsync(Enrolment enrolment, string why)
+    {
+        var sessionIds = await db.ClassSessions.Where(s => s.GroupId == enrolment.GroupId).Select(s => s.Id).ToListAsync();
+        await BookingService.CancelUpcomingAsync(db, notifications, clock, sessionIds, why, enrolment.StudentId);
     }
 
     private static string Details(List<string> already, List<string> noRoom, List<string> clashes) =>

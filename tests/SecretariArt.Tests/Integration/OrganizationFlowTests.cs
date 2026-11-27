@@ -149,12 +149,13 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         }
 
         string home = await person.GetStringAsync("/");
-        Assert.Single(Regex.Matches(home, "<h2>Athens Drama School</h2>"));
+        Assert.Single(Regex.Matches(home, ">Athens Drama School</h3>"));
         Assert.Contains(">Teacher<", home);
         Assert.Contains(">Student<", home);
 
         string members = await admin.GetStringAsync($"/admin/{athens}/members");
-        Assert.Single(Regex.Matches(members, Regex.Escape(email)));
+        // One row (the email also sits in the row's search key, so count it where it's shown).
+        Assert.Single(Regex.Matches(members, ">" + Regex.Escape(email)));
     }
 
     [Fact]
@@ -186,7 +187,7 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         Assert.Contains("Approve after all", afterReject);
 
         // The person sees the reason, and has to wait before asking again.
-        Assert.Contains("Reason: Our spring classes are full.", await student.GetStringAsync("/"));
+        Assert.Contains("Reason: “Our spring classes are full.”", WebUtility.HtmlDecode(await student.GetStringAsync("/")));
         string tooSoon = await (await student.SubmitFormAsync("/join", "/join", new()
         {
             ["InviteCode"] = "ATHENS26", ["Role"] = nameof(MembershipRole.Student),
@@ -266,7 +267,7 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         Assert.DoesNotContain("Athens Drama School", rejectedOnly);
         Assert.Contains(name, rejectedOnly);
 
-        Assert.Contains("Reason: Please use your school&#x27;s official name.", await requester.GetStringAsync("/"));
+        Assert.Contains("Reason: “Please use your school's official name.”", WebUtility.HtmlDecode(await requester.GetStringAsync("/")));
     }
 
     [Fact]

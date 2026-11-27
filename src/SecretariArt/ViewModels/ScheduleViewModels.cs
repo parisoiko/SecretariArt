@@ -6,10 +6,11 @@ using SecretariArt.Services;
 namespace SecretariArt.ViewModels;
 
 // One block in a week calendar. Tone picks the colour (an organisation, or a kind of class); Alert marks a clash in
-// red and Note something to check in amber; both also say it in words, never by colour alone.
+// red and Note something to check in amber; both also say it in words, never by colour alone. Compact is the one detail
+// line a block under 90 minutes has room for (default: Line2).
 public record WeekBlock(
     DayOfWeek Day, TimeOnly Starts, TimeOnly Ends, string Title, string? Line2, string? Line3, string? Url,
-    int Tone = 0, string? Alert = null, string? Note = null);
+    int Tone = 0, string? Alert = null, string? Note = null, string? Compact = null);
 
 public class WeekGridModel
 {
@@ -166,4 +167,12 @@ public class AvailabilityFormViewModel
     public TimeOnly? To { get; set; }
 
     public AvailabilityInput ToInput() => new(OrganizationId!.Value, Day!.Value, From!.Value, To!.Value);
+}
+
+// Milestone 5: the "Generate a timetable" page.
+public class GenerateViewModel
+{
+    public required OrganizationSchedule Schedule { get; init; }
+    public bool HasDraft { get; init; }
+    public GenerationMode Mode { get; init; }
 }

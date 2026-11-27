@@ -41,7 +41,8 @@ public interface ICourseService
 }
 
 public class CourseService(
-    SecretariArtDbContext db, IRulesService rulesService, IMembershipService memberships, INotificationService notifications) : ICourseService
+    SecretariArtDbContext db, IRulesService rulesService, IMembershipService memberships, INotificationService notifications,
+    TimeProvider? clock = null) : ICourseService
 {
     // ---- Courses ----
 
@@ -140,6 +141,10 @@ public class CourseService(
             var people = enrolments.Select(e => e.StudentId).Concat(course.Groups.Where(g => g.TeacherId != null).Select(g => g.TeacherId!));
             notifications.Add(people, organizationId, $"{await OrganizationNameAsync(organizationId)}: {course.Name} has been cancelled; its classes are off the timetable.", "/schedule");
         }
+        // Upcoming check-ins are cancelled (and the students told); past ones stay to be billed. Discounts given on
+        // this course go with it; charges already made keep theirs.
+        await BookingService.CancelUpcomingAsync(db, notifications, Clock, sessions.Select(s => s.Id).ToList(), $"{course.Name} has been cancelled");
+        db.StudentDiscounts.RemoveRange(await db.StudentDiscounts.Where(d => d.CourseId == courseId).ToListAsync());
         db.ClassSessions.RemoveRange(sessions);
         db.Enrolments.RemoveRange(enrolments);
         db.CourseGroups.RemoveRange(course.Groups);
@@ -243,6 +248,7 @@ public class CourseService(
             notifications.Add(people, organizationId,
                 $"{await OrganizationNameAsync(organizationId)}: group {group.Name} of {group.Course!.Name} has been closed; its classes are off the timetable.", "/schedule");
         }
+        await BookingService.CancelUpcomingAsync(db, notifications, Clock, sessions.Select(s => s.Id).ToList(), $"group {group.Name} of {group.Course!.Name} has been closed");
         db.ClassSessions.RemoveRange(sessions);
         db.Enrolments.RemoveRange(group.Enrolments);
         db.CourseGroups.Remove(group);
@@ -307,6 +313,8 @@ public class CourseService(
         // Places taken through the bundle stay (the database sets their BundleId to null); load them so EF does the
         // same for tracked rows on providers that don't.
         await db.Enrolments.Where(e => e.BundleId == bundleId).LoadAsync();
+        // Discounts given on the bundle go with it; charges already made keep theirs.
+        db.StudentDiscounts.RemoveRange(await db.StudentDiscounts.Where(d => d.BundleId == bundleId).ToListAsync());
         db.Bundles.Remove(bundle);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"{bundle.Name} deleted. Students enrolled through it keep their courses.");
@@ -460,6 +468,8 @@ public class CourseService(
         }
     }
 
+
+    private TimeProvider Clock => clock ?? TimeProvider.System;
 
     private async Task<string> OrganizationNameAsync(int organizationId) =>
         (await db.Organizations.AsNoTracking().FirstAsync(o => o.Id == organizationId)).Name;

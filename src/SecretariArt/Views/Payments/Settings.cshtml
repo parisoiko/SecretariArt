@@ -4,7 +4,7 @@
     ViewData["Title"] = $"Payment settings · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("payments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "payments"; }
 <partial name="_PaymentsNav" model="@("settings")" />
 
 <div class="row g-4">

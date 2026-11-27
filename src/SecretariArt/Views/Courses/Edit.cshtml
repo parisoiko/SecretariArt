@@ -6,7 +6,7 @@
     var rules = Model.Rules;
 }
 
-<partial name="_AdminHeader" model="@("courses")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "courses"; }
 
 <div class="narrow">
     <h2 class="section-title">@heading</h2>

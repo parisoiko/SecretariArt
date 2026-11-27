@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using SecretariArt.Extensions;
 using SecretariArt.Models;
 using SecretariArt.Services;
 using SecretariArt.ViewModels;
@@ -15,6 +17,7 @@ public class OrganizationsController(IOrganizationService organizations, IMember
     [HttpGet("organizations/request")]
     public IActionResult RequestOrganization() => View(new OrganizationRequestViewModel());
 
+    [EnableRateLimiting(RateLimitPolicies.OrganizationRequests)]
     [HttpPost("organizations/request")]
     public async Task<IActionResult> RequestOrganization(OrganizationRequestViewModel model)
     {
@@ -35,11 +38,14 @@ public class OrganizationsController(IOrganizationService organizations, IMember
         return RedirectToAction("Index", "Home");
     }
 
+    // The Home page's invite-code box sends the code along, so only the role is left to choose.
     [HttpGet("join")]
-    public IActionResult Join() => View(new JoinViewModel());
+    public IActionResult Join(string? code = null) =>
+        View(new JoinViewModel { InviteCode = string.IsNullOrWhiteSpace(code) ? "" : InviteCodeGenerator.Normalize(code) });
 
     // The invite link admins share: /join/ATHENS26. Anonymous visitors are sent to register first and come back here.
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.InviteCodes)]
     [HttpGet("join/{code}")]
     public async Task<IActionResult> JoinWithCode(string code)
     {
@@ -59,6 +65,7 @@ public class OrganizationsController(IOrganizationService organizations, IMember
         return View(nameof(Join), model);
     }
 
+    [EnableRateLimiting(RateLimitPolicies.InviteCodes)]
     [HttpPost("join")]
     public async Task<IActionResult> Join(JoinViewModel model)
     {

@@ -37,6 +37,9 @@ public interface IScheduleService
     // Each class's number of problems and notes: compared before and after a change made elsewhere (e.g. Rules),
     // to tell the admin how many classes it just flagged.
     Task<IReadOnlyDictionary<int, int>> FlagsAsync(int organizationId);
+
+    // Everything the conflict checks need, for the timetable generator (milestone 5).
+    Task<ScheduleContext> LoadContextAsync(int organizationId);
 }
 
 public class ScheduleService(
@@ -124,6 +127,11 @@ public class ScheduleService(
         CourseGroup group = context.Group(session.GroupId)!;
         Classroom room = context.Room(input.ClassroomId)!;
         string before = $"{When(session)} in {context.Room(session.ClassroomId)?.Name}";
+        // A new day or time makes upcoming check-ins wrong (a new room alone doesn't): they're cancelled and the
+        // students told. Decided on the class's present time, before it moves.
+        int cancelled = (input.Day, input.Starts) == (session.Day, session.Starts) ? 0
+            : await BookingService.CancelUpcomingAsync(db, notifications, clock, [session.Id],
+                $"the class moved to {input.Day} {input.Starts:HH:mm}–{check.Ends:HH:mm}");
         session.Day = input.Day;
         session.Starts = input.Starts;
         session.Ends = check.Ends;
@@ -137,7 +145,8 @@ public class ScheduleService(
 
         Notify(context, group, $"{Title(group)} moved from {before} to {after}.");
         await db.SaveChangesAsync();
-        return Saved($"{Title(group)} moved to {after}. Its teacher and students have been told.", check);
+        return Saved($"{Title(group)} moved to {after}. Its teacher and students have been told." +
+            (cancelled > 0 ? $" {DisplayNames.Plural(cancelled, "upcoming check-in")} {(cancelled == 1 ? "was" : "were")} cancelled." : ""), check);
     }
 
     public async Task<ServiceResult> DeleteAsync(int organizationId, int sessionId)
@@ -150,10 +159,12 @@ public class ScheduleService(
         }
 
         CourseGroup group = context.Group(session.GroupId)!;
+        int cancelled = await BookingService.CancelUpcomingAsync(db, notifications, clock, [session.Id], "the class was taken off the timetable");
         db.ClassSessions.Remove(session);
         Notify(context, group, $"{Title(group)} on {When(session)} has been taken off the timetable.");
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"{Title(group)} on {When(session)} removed. Its teacher and students have been told.");
+        return ServiceResult.Ok($"{Title(group)} on {When(session)} removed. Its teacher and students have been told." +
+            (cancelled > 0 ? $" {DisplayNames.Plural(cancelled, "upcoming check-in")} {(cancelled == 1 ? "was" : "were")} cancelled." : ""));
     }
 
     // Free slots for a group: every teaching day and start time on the grid, in the smallest suitable room that's
@@ -285,6 +296,8 @@ public class ScheduleService(
     private static string Title(CourseGroup group) => $"{group.Course!.Name} (group {group.Name})";
 
     private static string When(ClassSession session) => $"{session.Day} {session.Starts:HH:mm}–{session.Ends:HH:mm}";
+
+    public Task<ScheduleContext> LoadContextAsync(int organizationId) => LoadAsync(organizationId);
 
     internal async Task<ScheduleContext> LoadAsync(int organizationId)
     {

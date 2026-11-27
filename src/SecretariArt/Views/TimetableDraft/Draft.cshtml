@@ -1,0 +1,135 @@
+@model DraftView
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Draft timetable · {organization.Name}";
+    Layout = "_AdminLayout";
+    ViewData["AdminTab"] = "schedule";
+    ViewData["Heading"] = "Draft timetable";
+    bool startOver = Model.Draft.Mode == GenerationMode.StartOver;
+    ViewData["Intro"] = startOver
+        ? "The whole week, planned again. Nothing has changed yet: use it to replace the timetable, or discard it."
+        : "Your timetable with the missing classes filled in. Nothing has changed yet: use it to add them, or discard it.";
+    int missing = Model.Gaps.Sum(g => g.Missing);
+    int notes = Model.Classes.Count(c => c.IsNew && c.Warnings.Count > 0);
+    int kept = Model.Classes.Count(c => !c.IsNew);
+    var context = Model.Context;
+
+    // New classes stand out (tone 1); kept ones are in the usual colour. Every block says it in words too.
+    var blocks = Model.Classes.Select(c => new WeekBlock(
+        c.Session.Day, c.Session.Starts, c.Session.Ends,
+        $"{(c.IsNew ? "New: " : "")}{c.Group.Course!.Name} · {c.Group.Name}",
+        c.Room.Name, c.Group.Teacher?.FullName ?? "No teacher yet", null,
+        c.IsNew ? 1 : 0,
+        c.Problems.Count > 0 ? string.Join(" ", c.Problems) : null,
+        c.Warnings.Count > 0 ? string.Join(" ", c.Warnings) : null,
+        $"{c.Group.Teacher?.FirstName ?? "No teacher"} · {c.Room.Name}")).ToList();
+    var grid = WeekGridModel.Fit(blocks, context.Rules.TeachingDays.Days(), context.Rules.DayStarts, context.Rules.DayEnds, "Draft timetable");
+    grid.EmptyText = "The draft has no classes.";
+    string confirm = startOver
+        ? (Model.CurrentCount == 0
+            ? $"Put this timetable in place? {DisplayNames.Plural(Model.NewCount, "class", "classes")} will be added. Every teacher and student concerned gets a notification."
+            : $"Replace the timetable with this draft? Today's {DisplayNames.Plural(Model.CurrentCount, "class", "classes")} are removed and {DisplayNames.Plural(Model.NewCount, "class", "classes")} put in their place. Every teacher and student concerned gets a notification.") +
+          (Model.CheckInsCancelled > 0 ? $" {DisplayNames.Plural(Model.CheckInsCancelled, "upcoming check-in")} to today's classes will be cancelled, and the students told." : "")
+        : $"Add {DisplayNames.Plural(Model.NewCount, "class", "classes")} to the timetable? Their teachers and students get a notification.";
+}
+
+<a class="back-link" asp-controller="Schedule" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> Schedule</a>
+
+<div class="page-stack">
+    <div class="schedule-summary">
+        <div><strong>@Model.NewCount</strong> <span>@(startOver ? (Model.NewCount == 1 ? "class planned" : "classes planned") : (Model.NewCount == 1 ? "new class" : "new classes"))</span></div>
+        @if (!startOver)
+        {
+            <div><strong>@kept</strong> <span>kept as they are</span></div>
+        }
+        <div class="@(missing > 0 ? "text-danger" : "")"><strong>@missing</strong> <span>couldn't be placed</span></div>
+        <div class="@(notes > 0 ? "text-warning-emphasis" : "")"><strong>@notes</strong> <span>with a note</span></div>
+        <div class="text-muted small align-self-center">
+            Worked out @Model.Draft.CreatedAt.ToLocalTime().ToString("d MMM, HH:mm") in @((Model.Draft.Milliseconds / 1000.0).ToString("0.#")) s.
+            @(Model.Draft.Optimal ? "No noticeably better timetable exists with your rules and the generator's preferences." : "Good, though a better one may exist: generating again can find it.")
+        </div>
+    </div>
+
+    @if (Model.OutOfDate.Count > 0)
+    {
+        <div class="alert alert-danger mb-0" role="alert">
+            <i class="bi bi-exclamation-octagon me-2" aria-hidden="true"></i>
+            <strong>The timetable has changed since this draft was made</strong>, so it can't be used as it is:
+            <ul class="mb-0 mt-2">
+                @foreach (var reason in Model.OutOfDate.Take(5))
+                {
+                    <li>@reason</li>
+                }
+            </ul>
+            Generate a new draft.
+        </div>
+    }
+
+    @if (Model.CheckInsCancelled > 0)
+    {
+        <div class="note-amber">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <p class="mb-0">Using this draft cancels <strong>@DisplayNames.Plural(Model.CheckInsCancelled, "upcoming check-in")</strong> to today's classes: they're for
+               classes that go. Each student is told, isn't billed for it, and can check in to the new classes.</p>
+        </div>
+    }
+
+    <div class="draft-actions">
+        @if (Model.CanUse)
+        {
+            <form asp-action="Use" asp-route-organizationId="@organization.Id" method="post" data-confirm="@confirm">
+                <button class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> @(startOver ? "Use this timetable" : (Model.NewCount == 1 ? "Add this class" : $"Add these {Model.NewCount} classes"))</button>
+            </form>
+        }
+        <a class="btn btn-outline-secondary" asp-action="Generate" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Generate again</a>
+        <form asp-action="Discard" asp-route-organizationId="@organization.Id" method="post" data-confirm="Discard this draft? The timetable stays as it is.">
+            <button class="btn btn-outline-danger">Discard</button>
+        </form>
+    </div>
+
+    @if (Model.Gaps.Count > 0)
+    {
+        <section class="panel" aria-labelledby="gaps">
+            <div class="panel-head">
+                <h2 id="gaps">Couldn't be placed</h2>
+                <span class="count-badge">@missing</span>
+            </div>
+            @foreach (var gap in Model.Gaps)
+            {
+                <div class="request-row">
+                    <p class="mb-0"><strong>@gap.Group.Course!.Name · @gap.Group.Name</strong>: @DisplayNames.Plural(gap.Missing, "class", "classes") a week.</p>
+                    <p class="request-meta mb-0">@gap.Reason</p>
+                </div>
+            }
+        </section>
+    }
+
+    <section aria-labelledby="week">
+        <h2 id="week" class="section-title">The week</h2>
+        <ul class="legend mb-3" aria-label="Key">
+            <li><span class="legend-swatch tone-1" aria-hidden="true"></span> New (marked “New:”)</li>
+            @if (!startOver)
+            {
+                <li><span class="legend-swatch tone-0" aria-hidden="true"></span> Kept as it is</li>
+            }
+        </ul>
+        <partial name="_WeekGrid" model="grid" />
+    </section>
+
+    @if (notes > 0)
+    {
+        <section class="panel" aria-labelledby="notes">
+            <div class="panel-head">
+                <h2 id="notes">Notes on new classes</h2>
+                <span class="count-badge">@notes</span>
+            </div>
+            @foreach (var item in Model.Classes.Where(c => c.IsNew && c.Warnings.Count > 0))
+            {
+                <div class="request-row">
+                    <p class="mb-0"><strong>@item.Group.Course!.Name · @item.Group.Name</strong>, @item.Session.Day @item.Session.Starts.ToString("HH:mm")–@item.Session.Ends.ToString("HH:mm"), @item.Room.Name</p>
+                    <p class="request-meta mb-0">@string.Join(" ", item.Warnings)</p>
+                </div>
+            }
+        </section>
+    }
+</div>

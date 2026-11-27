@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSecretariArtData(builder.Configuration);
 builder.Services.AddSecretariArtIdentity();
 builder.Services.AddSecretariArtServices();
+builder.Services.AddSecretariArtRateLimiting(builder.Configuration);
 
 var app = builder.Build();
 
@@ -24,6 +25,8 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseAuthentication();
+// After authentication, so limits can be per signed-in person; after static files, which aren't counted.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllerRoute(

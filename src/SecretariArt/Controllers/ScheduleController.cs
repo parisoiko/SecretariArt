@@ -103,7 +103,9 @@ public class ScheduleController(IOrganizationService organizations, IScheduleSer
             courseTone.GetValueOrDefault(s.Group.CourseId),
             // All of them, not just the first: the hover text and the phone list show every note (QA, S4).
             s.Problems.Count > 0 ? string.Join(" ", s.Problems) : null,
-            s.Warnings.Count > 0 ? string.Join(" ", s.Warnings) : null)).ToList();
+            s.Warnings.Count > 0 ? string.Join(" ", s.Warnings) : null,
+            // Short blocks: who teaches it first, since that's what's looked for (QA, G6, G10).
+            $"{s.Group.Teacher?.FirstName ?? "No teacher"} · {s.Room.Name}")).ToList();
 
         string label = roomId != null ? $"Timetable of {current.Rooms.FirstOrDefault(r => r.Id == roomId)?.Name}"
             : teacherId != null ? $"Timetable of {current.Groups.Select(g => g.Group.Teacher).FirstOrDefault(t => t?.Id == teacherId)?.FullName}"

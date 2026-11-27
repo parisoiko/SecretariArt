@@ -1,0 +1,78 @@
+@model GenerateViewModel
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    ViewData["Title"] = $"Generate a timetable · {organization.Name}";
+    Layout = "_AdminLayout";
+    ViewData["AdminTab"] = "schedule";
+    ViewData["Heading"] = "Generate a timetable";
+    ViewData["Intro"] = "The generator places every group's weekly classes for you, keeping to your rules. You see a draft first: nothing changes until you use it.";
+    var schedule = Model.Schedule;
+    int placed = schedule.Groups.Sum(g => Math.Min(g.Placed, g.Needed));
+    int needed = schedule.Groups.Sum(g => g.Needed);
+}
+
+<a class="back-link" asp-controller="Schedule" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> Schedule</a>
+
+@if (Model.HasDraft)
+{
+    <div class="note-amber mb-4">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <p class="mb-0">A draft is already waiting. <a asp-action="Draft" asp-route-organizationId="@organization.Id">Look at it</a>, or generate a new one: it replaces the old.</p>
+    </div>
+}
+
+<div class="rules-layout">
+    <form asp-action="Generate" asp-route-organizationId="@organization.Id" method="post" class="rules-sections generate-form">
+        <section class="panel panel-pad" aria-labelledby="what">
+            <div class="panel-intro">
+                <h2 id="what">What to plan</h2>
+                <p>@placed of @needed weekly classes are in the timetable now.</p>
+            </div>
+            <fieldset>
+                <legend class="visually-hidden">What to plan</legend>
+                <div class="choice-cards">
+                    <label class="choice-card">
+                        <input type="radio" name="mode" value="@GenerationMode.FillGaps" checked="@(Model.Mode == GenerationMode.FillGaps)" disabled="@(placed == 0)" />
+                        <span>
+                            <strong>Fill the gaps</strong>
+                            Keep every class already in the timetable and place only what's missing (@(needed - placed) to go).
+                        </span>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="mode" value="@GenerationMode.StartOver" checked="@(Model.Mode == GenerationMode.StartOver)" />
+                        <span>
+                            <strong>Start over</strong>
+                            Plan the whole week again. If you use the draft, it replaces today's @DisplayNames.Plural(schedule.Sessions.Count, "class", "classes"), and everyone is told.
+                        </span>
+                    </label>
+                </div>
+            </fieldset>
+            <div>
+                <button type="submit" class="btn btn-primary generate-button">
+                    <i class="bi bi-magic" aria-hidden="true"></i> <span>Generate a draft</span>
+                </button>
+                <p class="form-text mb-0 mt-2">It takes up to about 20 seconds.</p>
+            </div>
+        </section>
+    </form>
+
+    <aside class="panel panel-pad rules-summary" aria-labelledby="keeps">
+        <h2 id="keeps">What it keeps to</h2>
+        <ul class="summary-list">
+            <li><i class="bi bi-check2-circle" aria-hidden="true"></i><span><strong>Always:</strong> your Rules (days, hours, start times), the rooms' features and size, the break between classes in a room, and no teacher, group or student in two places at once (also when a teacher teaches elsewhere).</span></li>
+            <li><i class="bi bi-stars" aria-hidden="true"></i><span><strong>As far as it can, in this order:</strong> teachers' availability, the daily teaching-hours limit, rooms with space for the group's places, a group's classes on different days, starts on the hour, students free of classes at other organisations, and an even week.</span></li>
+            <li><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>What it can't place, it tells you, with the reason.</span></li>
+        </ul>
+    </aside>
+</div>
+
+@section Scripts {
+    <script>
+        // A few seconds of work: say so, and don't let a second click start it again.
+        document.querySelector('.generate-form').addEventListener('submit', e => {
+            const button = e.target.querySelector('.generate-button');
+            button.disabled = true;
+            button.querySelector('span').textContent = 'Working it out…';
+        });
+    </script>
+}

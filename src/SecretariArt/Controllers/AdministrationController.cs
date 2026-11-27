@@ -64,10 +64,11 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/members/{membershipId:int}/approve")]
-    public async Task<IActionResult> Approve(int organizationId, int membershipId)
+    public async Task<IActionResult> Approve(int organizationId, int membershipId, string? returnUrl = null)
     {
         this.Report(await memberships.ApproveAsync(organizationId, membershipId));
-        return RedirectToAction(nameof(Members), new { organizationId });
+        // Approving from the Home page ("Needs your attention") goes back there.
+        return Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl!) : RedirectToAction(nameof(Members), new { organizationId });
     }
 
     // Rejecting has its own page: the admin must give a reason, which the person then sees on their Home page.

@@ -9,123 +9,250 @@
         .ToList();
     var waiting = Model.Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
     bool isPlatformAdmin = Model.PlatformRequestsWaiting != null;
-    // A platform admin with no memberships of their own has no use for "join a school".
-    bool showGettingStarted = !isPlatformAdmin || Model.Memberships.Count > 0;
+    bool hasRequests = waiting.Count > 0 || Model.OrganizationRequests.Count > 0;
+    // Someone with nothing yet gets the welcome (design: "home for a new user"); a platform admin has their own work.
+    bool newcomer = active.Count == 0 && !isPlatformAdmin;
+    string today = Model.Today.ToString("dddd, d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
 }
 
-<header class="page-header">
-    <h1>Hello, @Model.FirstName</h1>
-    <p>@(active.Count > 0 ? "Here are your organisations." : isPlatformAdmin ? "Here's what needs your attention." : "Let's get you connected to your school.")</p>
-</header>
-
-@if (isPlatformAdmin)
+@if (newcomer)
 {
-    <section class="action-grid mb-4">
-        <a class="action-card" asp-controller="Platform" asp-action="Organizations">
-            <i class="bi bi-inbox" aria-hidden="true"></i>
-            <h3>Organisation requests</h3>
-            <p>
-                @if (Model.PlatformRequestsWaiting > 0)
-                {
-                    <span class="badge text-bg-warning">@Model.PlatformRequestsWaiting waiting</span>
-                }
-                else
-                {
-                    <span>Nothing waiting.</span>
-                }
-            </p>
-        </a>
-        <a class="action-card" asp-controller="Platform" asp-action="AllOrganizations">
-            <i class="bi bi-buildings" aria-hidden="true"></i>
-            <h3>All organisations</h3>
-            <p>Every organisation on SecretariArt, with past decisions.</p>
-        </a>
-    </section>
-}
+    <div class="welcome">
+        <header class="welcome-head">
+            <h1>Welcome, @Model.FirstName</h1>
+            <p>You're not part of any organisation yet. Join your school or studio, or register your own to start running it here.</p>
+        </header>
 
-@if (active.Count > 0)
-{
-    <div class="org-grid mb-4">
-        @foreach (var organization in active)
-        {
-            Organization details = organization.First().Organization!;
-            bool isAdmin = organization.Any(m => m.Role == MembershipRole.Admin);
-            Model.PendingJoinRequests.TryGetValue(organization.Key, out int pendingRequests);
-            <article class="org-card">
-                <div class="org-type">@details.Type.Display() · <span lang="@details.City.Language()">@details.City</span></div>
-                <h2>@details.Name</h2>
-                <div class="d-flex flex-wrap gap-1 mb-3">
-                    @foreach (var membership in organization.OrderBy(m => m.Role))
-                    {
-                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
-                    }
+        <div class="welcome-grid">
+            <section class="welcome-card" aria-labelledby="join">
+                <span class="icon-tile" aria-hidden="true"><i class="bi bi-person-plus"></i></span>
+                <div>
+                    <h2 id="join">Join with an invite code</h2>
+                    <p>For students and teachers. Your school gives you the code.</p>
                 </div>
-                @if (isAdmin)
-                {
-                    <a class="btn btn-sm btn-outline-primary" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Key">
-                        <i class="bi bi-people" aria-hidden="true"></i> Members
-                        @if (pendingRequests > 0)
-                        {
-                            <span class="badge text-bg-warning ms-1">@pendingRequests waiting</span>
-                        }
-                    </a>
-                }
-            </article>
+                <form asp-controller="Organizations" asp-action="Join" method="get" class="welcome-form">
+                    <label for="code" class="form-label">Invite code</label>
+                    <div class="d-flex gap-2">
+                        <input id="code" name="code" class="form-control code-input" placeholder="e.g. K7Q2MX9P" autocomplete="off" required />
+                        <button type="submit" class="btn btn-primary">Join</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="welcome-card" aria-labelledby="register">
+                <span class="icon-tile" aria-hidden="true"><i class="bi bi-building"></i></span>
+                <div>
+                    <h2 id="register">Register your organisation</h2>
+                    <p>Run a school, studio or art space? Once we approve it, you become its admin.</p>
+                </div>
+                <ol class="steps">
+                    <li><span>1</span>Tell us about it</li>
+                    <li><span>2</span>We review the request</li>
+                    <li><span>3</span>Invite your teachers and students</li>
+                </ol>
+                <a class="btn btn-outline-primary mt-auto" asp-controller="Organizations" asp-action="RequestOrganization">Start a request</a>
+            </section>
+        </div>
+
+        @if (hasRequests)
+        {
+            <div class="welcome-requests">
+                <partial name="_YourRequests" model="Model" />
+            </div>
+        }
+        else
+        {
+            <p class="welcome-foot">Requests you send will show on this page until they're answered.</p>
         }
     </div>
+    return;
 }
 
-@if (waiting.Count > 0 || Model.OrganizationRequests.Count > 0)
-{
-    <section class="mb-4">
-        <h2 class="section-title">Requests</h2>
-        <ul class="list-group">
-            @foreach (var membership in waiting)
-            {
-                bool rejected = membership.Status == MembershipStatus.Rejected;
-                <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
-                    <span>
-                        Join <strong>@membership.Organization!.Name</strong> as a @membership.Role.ToString().ToLowerInvariant()
-                        <span class="text-muted small d-block">Asked @membership.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</span>
-                        @if (rejected && membership.RejectionReason != null)
-                        {
-                            <span class="small d-block">Reason: @membership.RejectionReason</span>
-                        }
-                    </span>
-                    <span class="status-pill status-@membership.Status.ToString().ToLowerInvariant()">@(rejected ? "Not approved" : "Waiting for approval")</span>
-                </li>
-            }
-            @foreach (var request in Model.OrganizationRequests)
-            {
-                bool rejected = request.Status == OrganizationStatus.Rejected;
-                <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
-                    <span>
-                        New organisation <strong>@request.Name</strong>
-                        <span class="text-muted small d-block">Sent @request.RequestedAt.ToLocalTime().ToString("d MMM yyyy")</span>
-                        @if (rejected && request.RejectionReason != null)
-                        {
-                            <span class="small d-block">Reason: @request.RejectionReason</span>
-                        }
-                    </span>
-                    <span class="status-pill status-@request.Status.ToString().ToLowerInvariant()">@(rejected ? "Not approved" : "Under review")</span>
-                </li>
-            }
-        </ul>
-    </section>
-}
+<header class="home-head">
+    <p class="home-date">@today</p>
+    <h1>Hello, @Model.FirstName</h1>
+</header>
 
-@if (showGettingStarted)
-{
-    <section class="action-grid">
-        <a class="action-card" asp-controller="Organizations" asp-action="Join">
-            <i class="bi bi-person-plus" aria-hidden="true"></i>
-            <h3>Join an organisation</h3>
-            <p>Have an invite code from your school or studio? Join as a student or a teacher.</p>
-        </a>
-        <a class="action-card" asp-controller="Organizations" asp-action="RequestOrganization">
-            <i class="bi bi-building-add" aria-hidden="true"></i>
-            <h3>Register your organisation</h3>
-            <p>Run a school, studio or art space? Ask for it to be set up and you'll become its admin.</p>
-        </a>
-    </section>
-}
+<div class="home-grid">
+    <div class="home-main">
+        @if (isPlatformAdmin)
+        {
+            <section class="panel" aria-labelledby="platform">
+                <div class="panel-head">
+                    <h2 id="platform">Platform</h2>
+                    @if (Model.PlatformRequestsWaiting > 0)
+                    {
+                        <span class="count-badge">@Model.PlatformRequestsWaiting</span>
+                    }
+                </div>
+                <div class="quick-links two panel-body">
+                    <a class="quick-link" asp-controller="Platform" asp-action="Organizations">
+                        <i class="bi bi-inbox" aria-hidden="true"></i>
+                        Organisation requests
+                        <small>@(Model.PlatformRequestsWaiting > 0 ? $"{Model.PlatformRequestsWaiting} waiting" : "Nothing waiting")</small>
+                    </a>
+                    <a class="quick-link" asp-controller="Platform" asp-action="AllOrganizations">
+                        <i class="bi bi-buildings" aria-hidden="true"></i>
+                        All organisations
+                        <small>Every organisation, with past decisions</small>
+                    </a>
+                </div>
+            </section>
+        }
+
+        @if (Model.JoinRequests.Count > 0)
+        {
+            <section class="panel" aria-labelledby="attention">
+                <div class="panel-head">
+                    <h2 id="attention">Needs your attention</h2>
+                    <span class="count-badge">@Model.PendingJoinRequests.Values.Sum()</span>
+                </div>
+                @foreach (var request in Model.JoinRequests)
+                {
+                    ApplicationUser user = request.User!;
+                    string role = request.Role.ToString();
+                    <div class="request-row">
+                        <div class="request-main">
+                            <span class="avatar avatar-lg" aria-hidden="true">@user.Initials</span>
+                            <div class="request-who">
+                                <p class="mb-0 fw-semibold"><span lang="@user.FullName.Language()">@user.FullName</span> wants to join as a @role.ToLowerInvariant()</p>
+                                <p class="request-meta"><span lang="@request.Organization!.Name.Language()">@request.Organization.Name</span> · asked @request.RequestedAt.ToLocalTime().ToString("d MMM")@(request.LastRejectedAt != null ? " · turned down before" : "")</p>
+                            </div>
+                            <div class="request-actions">
+                                <a class="btn btn-outline-secondary" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@request.OrganizationId"
+                                   aria-label="Review @user.FullName's request">Review</a>
+                                <form asp-controller="Administration" asp-action="Approve" asp-route-organizationId="@request.OrganizationId"
+                                      asp-route-membershipId="@request.Id" asp-route-returnUrl="/" method="post">
+                                    <button class="btn btn-primary" aria-label="Approve @user.FullName">Approve</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (active.Count > 0)
+        {
+            <section aria-labelledby="orgs">
+                <h2 id="orgs" class="home-section-title">Your organisations</h2>
+                <div class="org-cards">
+                    @foreach (var organization in active)
+                    {
+                        Organization details = organization.First().Organization!;
+                        bool isAdmin = organization.Any(m => m.Role == MembershipRole.Admin);
+                        bool isStudent = organization.Any(m => m.Role == MembershipRole.Student);
+                        bool isTeacher = organization.Any(m => m.Role == MembershipRole.Teacher);
+                        Model.PendingJoinRequests.TryGetValue(organization.Key, out int pendingRequests);
+                        <article class="org-card">
+                            <div class="org-card-head">
+                                <span class="org-mark" aria-hidden="true">@details.Name.Trim().FirstOrDefault()</span>
+                                <div class="min-w-0 flex-grow-1">
+                                    <p class="eyebrow">@details.Type.Display() · <span lang="@details.City.Language()">@details.City</span></p>
+                                    <h3 lang="@details.Name.Language()">@details.Name</h3>
+                                </div>
+                                <div class="org-card-roles">
+                                    @foreach (var membership in organization.OrderBy(m => m.Role))
+                                    {
+                                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="quick-links">
+                                @if (isAdmin)
+                                {
+                                    <a class="quick-link" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Key"><i class="bi bi-people" aria-hidden="true"></i>Members</a>
+                                    <a class="quick-link" asp-controller="Classrooms" asp-action="Index" asp-route-organizationId="@organization.Key"><i class="bi bi-door-open" aria-hidden="true"></i>Classrooms</a>
+                                    <a class="quick-link" asp-controller="Courses" asp-action="Index" asp-route-organizationId="@organization.Key"><i class="bi bi-journal-bookmark" aria-hidden="true"></i>Courses</a>
+                                }
+                                else
+                                {
+                                    <a class="quick-link" asp-controller="MySchedule" asp-action="Index"><i class="bi bi-calendar3" aria-hidden="true"></i>@(isTeacher ? "Teaching" : "My classes")</a>
+                                    @if (isTeacher)
+                                    {
+                                        <a class="quick-link" asp-controller="MySchedule" asp-action="Index" asp-route-tab="availability"><i class="bi bi-calendar-check" aria-hidden="true"></i>Availability</a>
+                                    }
+                                    @if (isStudent)
+                                    {
+                                        <a class="quick-link" asp-controller="MyPayments" asp-action="Index"><i class="bi bi-wallet2" aria-hidden="true"></i>Payments</a>
+                                    }
+                                }
+                            </div>
+                            @if (pendingRequests > 0)
+                            {
+                                <a class="org-alert" asp-controller="Administration" asp-action="Members" asp-route-organizationId="@organization.Key">
+                                    <span class="dot" aria-hidden="true"></span>
+                                    @DisplayNames.Plural(pendingRequests, "join request") to review
+                                    <i class="bi bi-chevron-right ms-auto" aria-hidden="true"></i>
+                                </a>
+                            }
+                        </article>
+                    }
+
+                    <div class="org-card-dashed">
+                        <p class="org-card-dashed-title">Part of another school?</p>
+                        <p class="text-muted small mb-0">The same account works everywhere. Teach at one place, study at another.</p>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a class="btn btn-primary" asp-controller="Organizations" asp-action="Join">Join with a code</a>
+                            <a class="btn btn-outline-secondary" asp-controller="Organizations" asp-action="RequestOrganization">Register one</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+
+    <aside class="home-aside" aria-label="Requests and what's coming up">
+        @if (hasRequests)
+        {
+            <partial name="_YourRequests" model="Model" />
+        }
+
+        <section class="coming-up" aria-labelledby="coming-up">
+            <h2 id="coming-up" class="eyebrow">Coming up</h2>
+            @if (Model.TodaysClasses.Count == 0 && Model.PaymentsDue.Count == 0)
+            {
+                <p class="text-muted small mb-0">Nothing today. Your classes and payment deadlines show here.</p>
+            }
+            @if (Model.TodaysClasses.Count > 0)
+            {
+                <p class="coming-up-label">Today</p>
+                <ul class="coming-list">
+                    @foreach (var item in Model.TodaysClasses)
+                    {
+                        <li class="@(item.Clash != null ? "clash" : "")">
+                            <span class="coming-time">@item.Session.Starts.ToString("HH:mm")</span>
+                            <span>
+                                <span lang="@item.Session.Group!.Course!.Name.Language()">@item.Session.Group.Course.Name</span>@(item.Teaching ? " · teaching" : "")
+                                <small>@item.Session.Classroom!.Name · <span lang="@item.Organization.Name.Language()">@item.Organization.Name</span></small>
+                                @if (item.Clash != null)
+                                {
+                                    <small class="text-danger"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> Clashes: @item.Clash</small>
+                                }
+                            </span>
+                        </li>
+                    }
+                </ul>
+                <a class="small" asp-controller="MySchedule" asp-action="Index">Your week</a>
+            }
+            @if (Model.PaymentsDue.Count > 0)
+            {
+                <p class="coming-up-label">Payments</p>
+                <ul class="coming-list">
+                    @foreach (var charge in Model.PaymentsDue)
+                    {
+                        bool overdue = charge.IsOverdue(Model.Today);
+                        <li class="@(overdue ? "clash" : "")">
+                            <span class="coming-time money">@DisplayNames.Money(charge.Balance)</span>
+                            <span>
+                                @charge.Description
+                                <small class="@(overdue ? "text-danger fw-semibold" : "")">@(overdue ? $"Overdue since {DisplayNames.ShortDate(charge.DueOn)}" : $"Due {DisplayNames.ShortDate(charge.DueOn)}") · <span lang="@charge.Organization!.Name.Language()">@charge.Organization.Name</span></small>
+                            </span>
+                        </li>
+                    }
+                </ul>
+                <a class="small" asp-controller="MyPayments" asp-action="Index">All payments</a>
+            }
+        </section>
+    </aside>
+</div>

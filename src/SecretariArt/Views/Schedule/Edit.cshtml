@@ -6,7 +6,7 @@
     ViewData["Title"] = $"{title} · Schedule · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("schedule")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "schedule"; }
 
 <a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> Whole timetable</a>
 

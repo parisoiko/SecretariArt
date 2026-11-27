@@ -6,6 +6,7 @@ It uses its own accounts and fills the site with data as it goes. Its brief is `
 **Terminal 1: the QA app** (http://localhost:5200, database `SecretariArt_QA`, no demo data):
 ```powershell
 powershell -File qa/start-qa-app.ps1          # add -Reset to start again from an empty database
+powershell -File qa/start-qa-app.ps1 -RealRateLimits   # keep production rate limits (raised by default)
 ```
 
 **Terminal 2: the tester** (from the repo root):

@@ -26,6 +26,31 @@ public class ScheduleFlowTests(SecretariArtFactory factory)
         WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
 
     [Fact]
+    public async Task AnAdmin_GeneratesADraft_LooksAtIt_AndDiscardsIt_WithoutChangingTheTimetable()
+    {
+        HttpClient admin = await SignedInAsync(Eleni);
+        string root = $"/admin/{Athens}/schedule";
+        int before = factory.Query(db => db.ClassSessions.Count(s => s.OrganizationId == Athens));
+        Assert.Contains("Generate a timetable", WebUtility.HtmlDecode(await admin.GetStringAsync(root)));
+
+        // Every Athens group already has its classes: filling gaps has nothing to do, and says so.
+        HttpResponseMessage nothing = await admin.SubmitFormAsync($"{root}/generate", $"{root}/generate", new() { ["mode"] = nameof(GenerationMode.FillGaps) });
+        Assert.Contains("Every group already has all its classes", await PageAsync(nothing));
+
+        HttpResponseMessage generated = await admin.SubmitFormAsync($"{root}/generate", $"{root}/generate", new() { ["mode"] = nameof(GenerationMode.StartOver) });
+        string draft = await PageAsync(generated);
+        Assert.Contains("Draft timetable", draft);
+        Assert.Contains("Draft ready in", draft);
+        Assert.Contains("Use this timetable", draft);
+        Assert.Contains("New: Acting I · A", draft);
+        Assert.Equal(before, factory.Query(db => db.ClassSessions.Count(s => s.OrganizationId == Athens)));
+
+        HttpResponseMessage discarded = await admin.SubmitFormAsync($"{root}/draft", $"{root}/draft/discard", []);
+        Assert.Contains("Draft discarded. The timetable is as it was.", await PageAsync(discarded));
+        Assert.False(factory.Query(db => db.ScheduleDrafts.Any(d => d.OrganizationId == Athens)));
+    }
+
+    [Fact]
     public async Task TheDemoTimetable_ShowsInTheEditor_AndInPersonalCalendars()
     {
         HttpClient admin = await SignedInAsync(Eleni);

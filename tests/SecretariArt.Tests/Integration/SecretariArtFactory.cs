@@ -15,6 +15,9 @@ namespace SecretariArt.Tests.Integration;
 // so the platform admin and the demo organisations are seeded (see DbInitializer).
 public class SecretariArtFactory : WebApplicationFactory<Program>
 {
+    protected virtual IEnumerable<(string Limit, int Permits)> Limits =>
+        new[] { "Global", "SignIn", "Register", "InviteCodes", "OrganizationRequests", "Generation" }.Select(l => (l, 100_000));
+
     // An in-memory SQLite database lives as long as one connection to it stays open.
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
 
@@ -25,6 +28,12 @@ public class SecretariArtFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         // Billing runs when pages ask for it; the hourly worker would share the one SQLite connection at random times.
         builder.UseSetting("Billing:RunInBackground", "false");
+        // Every test comes from the same in-memory address and signs in many times: limits high enough never to
+        // get in the way (RateLimitTests checks them with low ones).
+        foreach ((string limit, int permits) in Limits)
+        {
+            builder.UseSetting($"RateLimits:{limit}:PermitLimit", permits.ToString());
+        }
         builder.ConfigureServices(services =>
         {
             // Since EF Core 8 the provider is configured through IDbContextOptionsConfiguration<T>: remove it too,
@@ -93,7 +102,8 @@ public static class BrowserExtensions
             ["Password"] = DbInitializer.DemoPassword,
             ["ConfirmPassword"] = DbInitializer.DemoPassword,
         });
-        Assert.Contains($"Hello, {firstName}", await response.Content.ReadAsStringAsync());
+        // A new account belongs to no organisation yet: the welcome page.
+        Assert.Contains($"Welcome, {firstName}", await response.Content.ReadAsStringAsync());
         return email;
     }
 }

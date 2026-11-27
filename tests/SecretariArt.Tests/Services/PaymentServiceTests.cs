@@ -18,6 +18,8 @@ public sealed class PaymentServiceTests : IDisposable
     private readonly PaymentSetupService _setup;
     private readonly BookingService _bookings;
     private readonly EnrolmentService _enrolments;
+    private readonly ScheduleService _schedule;
+    private readonly CourseService _courses;
 
     private readonly int _org;
     private readonly ApplicationUser _admin;
@@ -40,7 +42,10 @@ public sealed class PaymentServiceTests : IDisposable
         _billing = new BillingService(_db, notifications, _clock);
         _setup = new PaymentSetupService(_db, memberships, _billing, _clock);
         _bookings = new BookingService(_db, _clock);
-        _enrolments = new EnrolmentService(_db, memberships, _clock);
+        _enrolments = new EnrolmentService(_db, memberships, _clock, notifications);
+        var rules = new RulesService(_db, _clock);
+        _schedule = new ScheduleService(_db, rules, notifications, _clock);
+        _courses = new CourseService(_db, rules, memberships, notifications, _clock);
 
         _admin = AddUser("admin");
         var organization = new Organization
@@ -459,6 +464,75 @@ public sealed class PaymentServiceTests : IDisposable
         SetSchoolTime(10, 1, 9);
         await _billing.EnsureChargesAsync(_org);
         Assert.DoesNotContain(Charges(), c => c.Kind == ChargeKind.PerClass);
+    }
+
+    // ---- Classes that change after students checked in (found while building milestone 5) ----
+
+    [Fact]
+    public async Task TakingAClassOffTheTimetable_CancelsUpcomingCheckIns_AndStillBillsPastOnes()
+    {
+        Settings(billNoShows: false);
+        await _bookings.BookAsync(_student.Id, _drawingClass.Id, Wednesday);
+        await _bookings.BookAsync(_student.Id, _drawingClass.Id, Wednesday.AddDays(7));
+        SetSchoolTime(9, 3, 10); // after the first class
+
+        ServiceResult removed = await _schedule.DeleteAsync(_org, _drawingClass.Id);
+
+        Assert.True(removed.Succeeded, removed.Error);
+        Assert.Contains("1 upcoming check-in was cancelled", removed.Message);
+        Booking past = _db.Bookings.AsNoTracking().Single();
+        Assert.Equal((Wednesday, (int?)null), (past.Date, past.SessionId));
+        Assert.Contains(_db.Notifications.Where(n => n.UserId == _student.Id), n =>
+            n.Text == "Atelier: Your check-in to Life drawing on Wednesday 9 September at 19:00 was cancelled because the class was taken off " +
+                      "the timetable. You won't be billed for it: check in to another class on your Schedule.");
+
+        // The class that did happen is billed at the end of the month, though its weekly class is gone.
+        SetSchoolTime(10, 1, 9);
+        await _billing.EnsureChargesAsync(_org);
+        Assert.Equal("Life drawing, September 2026: 1 class × €15.00", Charges().Single(c => c.Kind == ChargeKind.PerClass).Description);
+    }
+
+    [Fact]
+    public async Task MovingAClass_CancelsItsUpcomingCheckIns_ButANewRoomAloneDoesnt()
+    {
+        await _bookings.BookAsync(_student.Id, _drawingClass.Id, Wednesday);
+        int studio = _db.Classrooms.Single().Id;
+        var otherRoom = new Classroom { OrganizationId = _org, Name = "Loft", Capacity = 10 };
+        _db.Classrooms.Add(otherRoom);
+        _db.SaveChanges();
+
+        await _schedule.UpdateAsync(_org, _drawingClass.Id, new SessionInput(_drawingA.Id, otherRoom.Id, DayOfWeek.Wednesday, new TimeOnly(19, 0)));
+        Assert.Single(_db.Bookings);
+
+        ServiceResult moved = await _schedule.UpdateAsync(_org, _drawingClass.Id, new SessionInput(_drawingA.Id, studio, DayOfWeek.Thursday, new TimeOnly(19, 0)));
+
+        Assert.Contains("1 upcoming check-in was cancelled", moved.Message);
+        Assert.Empty(_db.Bookings);
+    }
+
+    [Fact]
+    public async Task LeavingAGroup_CancelsTheStudentsUpcomingCheckIns()
+    {
+        await _bookings.BookAsync(_student.Id, _drawingClass.Id, Wednesday);
+        int enrolment = _db.Enrolments.Single(e => e.StudentId == _student.Id && e.GroupId == _drawingA.Id).Id;
+
+        await _enrolments.UnenrolAsync(_org, enrolment);
+
+        Assert.Empty(_db.Bookings);
+        Assert.Contains(_db.Notifications.Where(n => n.UserId == _student.Id), n => n.Text.Contains("because you're no longer enrolled in Life drawing"));
+    }
+
+    [Fact]
+    public async Task ACourseWithCheckInsAndDiscounts_CanBeDeleted()
+    {
+        await _setup.GiveDiscountAsync(_org, _student.Id, new StudentDiscountInput(null, 10, "Early bird", _drawing.Id, null));
+        await _bookings.BookAsync(_student.Id, _drawingClass.Id, Wednesday);
+
+        ServiceResult deleted = await _courses.DeleteAsync(_org, _drawing.Id);
+
+        Assert.True(deleted.Succeeded, deleted.Error);
+        Assert.Empty(_db.Bookings);
+        Assert.Empty(_db.StudentDiscounts);
     }
 
     [Fact]

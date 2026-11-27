@@ -5,7 +5,7 @@
     ViewData["Title"] = $"{heading} · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("bundles")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "bundles"; }
 
 <div class="narrow">
     <h2 class="section-title">@heading</h2>

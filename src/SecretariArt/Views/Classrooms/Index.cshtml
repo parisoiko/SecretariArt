@@ -4,7 +4,7 @@
     ViewData["Title"] = $"Classrooms · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("classrooms")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "classrooms"; }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <p class="text-muted mb-0">The rooms sessions can take place in. Courses say what they need; the schedule only uses rooms that have it.</p>

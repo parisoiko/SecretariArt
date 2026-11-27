@@ -10,5 +10,8 @@ public class ApplicationUser : IdentityUser
 
     public string FullName => $"{FirstName} {LastName}";
 
+    // "ΑΠ" for Ανδρέας Παπαδόπουλος: the round avatar in lists and the header.
+    public string Initials => string.Concat(FirstName.Trim().Take(1).Concat(LastName.Trim().Take(1))).ToUpperInvariant();
+
     public List<Membership> Memberships { get; set; } = [];
 }

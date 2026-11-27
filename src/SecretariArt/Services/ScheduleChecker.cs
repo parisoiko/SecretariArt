@@ -27,6 +27,13 @@ public class ScheduleContext
     // Teaching elsewhere only clashes if both organisations are teaching in the same weeks.
     public bool SameWeeks(int otherOrganizationId) =>
         ScheduleChecker.TermsOverlap(Rules, OtherRules.GetValueOrDefault(otherOrganizationId));
+
+    // The same organisation with a different timetable: to check a draft as if it were in place.
+    public ScheduleContext WithSessions(IReadOnlyList<ClassSession> sessions) => new()
+    {
+        Organization = Organization, Rules = Rules, Rooms = Rooms, Groups = Groups, Sessions = sessions, Availability = Availability,
+        TaughtElsewhere = TaughtElsewhere, AttendedElsewhere = AttendedElsewhere, OtherRules = OtherRules,
+    };
 }
 
 public record ScheduleCheck(TimeOnly Ends, IReadOnlyList<string> Problems, IReadOnlyList<string> Warnings)

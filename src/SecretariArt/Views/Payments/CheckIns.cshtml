@@ -4,7 +4,7 @@
     ViewData["Title"] = $"Check-ins · {organization.Name}";
 }
 
-<partial name="_AdminHeader" model="@("payments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "payments"; }
 <partial name="_PaymentsNav" model="@("check-ins")" />
 
 <p class="text-muted">Classes of per-class courses, from last week to two weeks ahead, with how many students checked in.

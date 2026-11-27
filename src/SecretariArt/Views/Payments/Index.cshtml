@@ -10,7 +10,7 @@
     ];
 }
 
-<partial name="_AdminHeader" model="@("payments")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "payments"; }
 <partial name="_PaymentsNav" model="@("books")" />
 
 <div class="money-cards mb-4">

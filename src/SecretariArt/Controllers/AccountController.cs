@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using SecretariArt.Extensions;
 using SecretariArt.Models;
 using SecretariArt.ViewModels;
 
@@ -22,6 +24,7 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
         return View(new RegisterViewModel());
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Register)]
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl = null)
     {
@@ -83,6 +86,7 @@ public class AccountController(UserManager<ApplicationUser> users, SignInManager
         return View(new LoginViewModel { Email = email ?? "" });
     }
 
+    [EnableRateLimiting(RateLimitPolicies.SignIn)]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
     {

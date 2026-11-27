@@ -20,6 +20,9 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
     public DbSet<ClassSession> ClassSessions => Set<ClassSession>();
     public DbSet<TeacherAvailability> TeacherAvailability => Set<TeacherAvailability>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<ScheduleDraft> ScheduleDrafts => Set<ScheduleDraft>();
+    public DbSet<DraftSession> DraftSessions => Set<DraftSession>();
+    public DbSet<DraftGap> DraftGaps => Set<DraftGap>();
     public DbSet<PaymentSettings> PaymentSettings => Set<PaymentSettings>();
     public DbSet<Discount> Discounts => Set<Discount>();
     public DbSet<StudentDiscount> StudentDiscounts => Set<StudentDiscount>();
@@ -79,6 +82,29 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         ConfigureAdministration(builder);
         ConfigureScheduling(builder);
         ConfigurePayments(builder);
+        ConfigureGeneration(builder);
+    }
+
+    // Milestone 5. A draft belongs to its organisation and goes with it; its rows go with the draft. Group and room ids
+    // are plain values: a draft that refers to something deleted since is refused when used (it's checked again).
+    private static void ConfigureGeneration(ModelBuilder builder)
+    {
+        builder.Entity<ScheduleDraft>(draft =>
+        {
+            draft.Property(d => d.Mode).HasConversion<string>().HasMaxLength(20);
+            draft.HasIndex(d => d.OrganizationId).IsUnique();
+            draft.HasOne(d => d.Organization).WithMany().HasForeignKey(d => d.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<DraftSession>(session =>
+        {
+            session.Property(s => s.Day).HasConversion<string>().HasMaxLength(10);
+            session.HasOne(s => s.Draft).WithMany(d => d.Sessions).HasForeignKey(s => s.DraftId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<DraftGap>(gap =>
+        {
+            gap.Property(g => g.Reason).HasMaxLength(500);
+            gap.HasOne(g => g.Draft).WithMany(d => d.Gaps).HasForeignKey(g => g.DraftId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     // Milestone 4. Money is decimal(10,2). Charges and payments are never deleted with a student or course: the books
@@ -120,7 +146,10 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         {
             booking.HasIndex(b => new { b.SessionId, b.Date, b.StudentId }).IsUnique();
             booking.HasIndex(b => new { b.OrganizationId, b.Date });
-            booking.HasOne(b => b.Session).WithMany().HasForeignKey(b => b.SessionId).OnDelete(DeleteBehavior.Restrict);
+            // Taking a class off the timetable keeps its past check-ins (still billed) without their class; upcoming ones
+            // are cancelled first, and their students told (BookingService.CancelUpcomingAsync).
+            booking.HasOne(b => b.Session).WithMany().HasForeignKey(b => b.SessionId).OnDelete(DeleteBehavior.SetNull);
+            booking.HasIndex(b => new { b.OrganizationId, b.CourseId });
             booking.HasOne(b => b.Student).WithMany().HasForeignKey(b => b.StudentId).OnDelete(DeleteBehavior.Restrict);
         });
 

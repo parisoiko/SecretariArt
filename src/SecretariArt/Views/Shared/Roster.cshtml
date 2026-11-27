@@ -9,7 +9,8 @@
 
 @if (Model.AsAdmin)
 {
-    <partial name="_AdminHeader" model="@("payments")" />
+    Layout = "_AdminLayout";
+    ViewData["AdminTab"] = "payments";
     <partial name="~/Views/Payments/_PaymentsNav.cshtml" model="@("check-ins")" />
     <a class="back-link" asp-action="CheckIns" asp-route-organizationId="@item.Organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All classes</a>
 }

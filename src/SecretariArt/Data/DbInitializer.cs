@@ -492,7 +492,7 @@ public static class DbInitializer
                 {
                     db.Bookings.Add(new Booking
                     {
-                        OrganizationId = patras.Id, SessionId = contemporary.Id, Date = date, StudentId = dimitra.Id,
+                        OrganizationId = patras.Id, SessionId = contemporary.Id, CourseId = contemporary.Group!.CourseId, Date = date, StudentId = dimitra.Id,
                         BookedAt = now.AddDays(-35), NoShow = noShow,
                     });
                 }

@@ -12,7 +12,7 @@
         $" {DisplayNames.Plural(classes, "weekly class", "weekly classes")} will come off the timetable, and the people in them will be told.";
 }
 
-<partial name="_AdminHeader" model="@("courses")" />
+@{ Layout = "_AdminLayout"; ViewData["AdminTab"] = "courses"; }
 
 <a class="back-link" asp-action="Index" asp-route-organizationId="@organization.Id"><i class="bi bi-arrow-left" aria-hidden="true"></i> All courses</a>
 

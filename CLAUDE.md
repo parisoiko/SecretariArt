@@ -29,7 +29,8 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
   `{organizationId}` from the route: every admin route must contain it.
 - Any organisation-owned data must carry `OrganizationId`, and queries must filter by it.
 - Admin tabs derive from `OrganizationAdminController` (routes `admin/{organizationId}/...`); redirect with
-  `ReportAndRedirect`, which keeps the organisation id. A student takes a course in one group (unique index).
+  `ReportAndRedirect`, which keeps the organisation id. Their views use `_AdminLayout` (set `Layout = "_AdminLayout"` and
+  `ViewData["AdminTab"]`; optional `Heading`, `Intro` and a `HeadingAside` section): sidebar, organisation switcher, page title. A student takes a course in one group (unique index).
 - The timetable is weekly (`ClassSession`: group, room, day, start–end, every week of the term). All clash rules live in
   `ScheduleChecker` (problems refuse, warnings save with a note); enrolment and group-teacher changes use
   `TimetableClashes`. Session changes notify the group's teacher and students (`INotificationService`).
@@ -38,12 +39,21 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
   (idempotent via `Charge.Key`) when pages open and hourly in `BillingWorker` (`Billing:RunInBackground=false` in tests).
   Charges keep their amounts; only this month's unpaid fees follow price or discount changes. Times and dates are the
   school's (`SchoolTime`, Europe/Athens). SQLite can't sum or compare decimals: do money maths in memory.
+- Timetable generation: `TimetableGenerator` (pure, CP-SAT over one week axis in minutes) plans from a `ScheduleContext`;
+  hard constraints = ScheduleChecker's problems, soft ones = its warnings. `TimetableDraftService` stores one draft per
+  organisation and re-checks it with ScheduleChecker before using it. Check-ins keep their `CourseId` and outlive their
+  class: removing or moving classes cancels upcoming check-ins via `BookingService.CancelUpcomingAsync` (call it
+  wherever classes go away).
 
 ## Conventions
 - Registrations live in `Extensions/ServiceCollectionExtensions.cs`; `Program.cs` stays short.
 - Business rules live in services returning `ServiceResult`; controllers stay thin.
 - Primary constructors for injection; `TimeProvider` for "now" (testable).
 - Enums are stored as strings. Read every migration before applying it.
+- Rate limits (`Extensions/RateLimiting.cs`, section `RateLimits`): a global flood guard per person or IP, and stricter
+  sliding windows on sign-in and registration (per IP), invite codes and organisation requests (per person). Add
+  `[EnableRateLimiting(...)]` to any new action someone could script. Behind a reverse proxy, configure forwarded headers
+  first, or every visitor shares the proxy's address. Tests raise the limits (`SecretariArtFactory.Limits`).
 - `[Required]` is always explicit on view models. State-changing actions are POST + anti-forgery (global filter).
   A `<form>` with a hand-written `action` gets no token unless it has `asp-antiforgery="true"`.
 - Comments explain *why*. UI text is British English ("organisation").
@@ -63,4 +73,5 @@ bundle fees in every state (Eleftheria overdue) and Dimitra's Contemporary check
 ## Roadmap
 Plan with milestones: 1 accounts & organisations (done) · 2 administration (rules, classrooms, courses/groups/bundles,
 enrolments; done) · 3 schedules by hand (availability, editor with conflict checks, calendars, notifications; done) ·
-4 payments (prices, check-ins, discounts, charges, books; done) · 5 automatic generation with Google OR-Tools CP-SAT · 6 polish.
+4 payments (prices, check-ins, discounts, charges, books; done) · 5 automatic generation with Google OR-Tools CP-SAT
+(drafts: fill the gaps or start over; done) · 6 polish.
