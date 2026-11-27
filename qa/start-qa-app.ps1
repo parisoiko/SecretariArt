@@ -33,10 +33,12 @@ $env:PlatformAdmin__Email = 'qa-platform@test.secretariart.app'
 $env:PlatformAdmin__Password = 'QaTest!2026'
 $env:PlatformAdmin__FirstName = 'QA'
 $env:PlatformAdmin__LastName = 'Platform'
+# Emails (password resets) are saved where the tester can read them, apart from the dev app's.
+$env:Email__PickupDirectory = Join-Path $repo 'qa/reports/mail'
 # The tester works from one address and creates many accounts: rate limits stay on (same code as production) but high
 # enough never to get in its way. Pass -RealRateLimits to test with the production limits instead.
 if (-not $RealRateLimits) {
-    foreach ($limit in 'Global', 'SignIn', 'Register', 'InviteCodes', 'OrganizationRequests', 'Generation') {
+    foreach ($limit in 'Global', 'SignIn', 'Register', 'InviteCodes', 'OrganizationRequests', 'Generation', 'AccountRecovery') {
         Set-Item "env:RateLimits__${limit}__PermitLimit" 100000
     }
 }

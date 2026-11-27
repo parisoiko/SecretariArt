@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using SecretariArt.Extensions;
 using SecretariArt.Services;
 
 namespace SecretariArt.Controllers;
@@ -7,7 +7,7 @@ namespace SecretariArt.Controllers;
 [Route("notifications")]
 public class NotificationsController(INotificationService notifications, ICurrentUserMemberships currentMemberships) : Controller
 {
-    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private string UserId => User.UserId();
 
     // Shows the latest notifications; unread ones are highlighted on this visit and marked read for the next.
     [HttpGet("")]

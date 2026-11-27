@@ -685,6 +685,11 @@ namespace SecretariArt.Data.Migrations
                     b.Property<int>("GroupId")
                         .HasColumnType("int");
 
+                    b.Property<string>("GroupLabel")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
                     b.Property<TimeOnly>("Starts")
                         .HasColumnType("time");
 

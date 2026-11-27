@@ -42,6 +42,15 @@ public static class PaymentDefaults
 
     // How far ahead students can check in to per-class courses.
     public const int BookingDaysAhead = 28;
+
+    // When a charge is made after its usual due day (e.g. someone enrolled on the 20th), they get this long to pay.
+    public const int LateChargeDays = 7;
+
+    // "Due soon" on the books and on a student's Home: due within this many days.
+    public const int DueSoonDays = 14;
+
+    // The most a price, charge or payment can be: a typing error guard.
+    public const decimal MaxPrice = 100_000m;
 }
 
 // A discount the organisation gives, e.g. "Siblings" 25%, "Scholarship" 50%.
@@ -68,6 +77,8 @@ public class StudentDiscount
     public int? DiscountId { get; set; }
     public Discount? Discount { get; set; }
 
+    public const int ReasonMaxLength = 200;
+
     // For a one-off discount (no DiscountId).
     public decimal? Percent { get; set; }
     public string? Reason { get; set; }
@@ -81,6 +92,9 @@ public class StudentDiscount
 
     public decimal EffectivePercent => Discount?.Percent ?? Percent ?? 0;
     public string Label => Discount?.Name ?? Reason ?? "Discount";
+
+    // "Acting I", "Year 1 – Acting" or "everything".
+    public string AppliesTo => Course?.Name ?? Bundle?.Name ?? "everything";
 }
 
 // A check-in to one dated class of a per-class course ("Life drawing, Thursday 27 November, 18:00").
@@ -93,7 +107,7 @@ public class Booking
     public int? SessionId { get; set; }
     public ClassSession? Session { get; set; }
 
-    // The course it bills, kept here so billing works whatever happens to the class (milestone 5 fix). A plain id,
+    // The course it bills, kept here so billing works whatever happens to the class. A plain id,
     // like Charge.CourseId: a check-in of a course deleted since is simply not billed.
     public int CourseId { get; set; }
 

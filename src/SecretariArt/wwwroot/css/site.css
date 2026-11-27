@@ -118,17 +118,7 @@ h1, h2, h3, .navbar-brand, .auth-brand { font-family: "Fraunces", Georgia, serif
 .status-rejected { background: #fbe4e4; color: #9b2c2c; }
 .status-active { background: #e3f4ea; color: #1f6b43; }
 
-.action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem; }
-.action-card {
-    display: block; padding: 1.25rem; border-radius: var(--sa-radius); background: var(--sa-violet-100);
-    color: var(--sa-ink); text-decoration: none; border: 1px solid transparent; transition: border-color 0.15s;
-}
-.action-card:hover { border-color: var(--sa-violet-600); color: var(--sa-ink); }
-.action-card i { font-size: 1.6rem; color: var(--sa-violet-600); }
-.action-card h3 { font-size: 1.1rem; margin: 0.5rem 0 0.25rem; }
-.action-card p { margin: 0; color: var(--sa-muted); font-size: 0.95rem; }
-
-.form-card, .table-card, .invite-panel, .panel {
+.form-card, .table-card, .panel {
     background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: var(--sa-radius);
 }
 .form-card { padding: 1.5rem; }
@@ -158,12 +148,10 @@ h1, h2, h3, .navbar-brand, .auth-brand { font-family: "Fraunces", Georgia, serif
     .table-stack td:empty { display: none; }
 }
 
-.invite-panel { padding: 1.25rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .invite-code {
     font-family: ui-monospace, "Cascadia Code", monospace; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.12em;
     padding: 0.2rem 0.8rem; background: #fff4e0; color: var(--sa-violet); border: 1px dashed var(--sa-amber); border-radius: 0.5rem;
 }
-.invite-link { max-width: 28rem; font-size: 0.9rem; }
 .code-input { text-transform: uppercase; letter-spacing: 0.1em; font-family: ui-monospace, "Cascadia Code", monospace; }
 /* Codes are shown in capitals as typed; the "e.g." hint isn't a code. */
 .code-input::placeholder { text-transform: none; letter-spacing: normal; }
@@ -359,7 +347,9 @@ a.week-block:hover, a.week-block:focus-visible { color: var(--sa-ink); box-shado
     display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
     padding: 0.5rem 0.7rem; background: var(--sa-card); border: 1px solid var(--sa-line); border-radius: 0.5rem;
 }
-.group-progress li.done { opacity: 0.7; }
+/* Finished groups recede without fading their text below readable contrast (opacity did, WCAG AA). */
+.group-progress li.done { background: transparent; border-style: dashed; }
+.group-progress li.done strong { font-weight: 500; }
 .suggestion-list li { justify-content: flex-start; }
 
 .legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; }
@@ -676,3 +666,28 @@ a.class-row:hover { box-shadow: 0 6px 16px rgba(31, 26, 46, 0.08); color: inheri
 .choice-card input:disabled + span { opacity: 0.55; cursor: not-allowed; }
 .draft-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .draft-actions form { margin: 0; }
+
+/* Bootstrap's danger red (#dc3545) is 4.2:1 on our hovered rows, under the 4.5:1 that WCAG AA asks of text. */
+.btn-outline-danger {
+    --bs-btn-color: #b02a37;
+    --bs-btn-border-color: #b02a37;
+    --bs-btn-hover-bg: #b02a37;
+    --bs-btn-hover-border-color: #b02a37;
+    --bs-btn-active-bg: #8f222d;
+    --bs-btn-active-border-color: #8f222d;
+}
+
+/* Keyboard focus on the dark header: Bootstrap's focus ring is invisible there (QA, A3). */
+.app-navbar .user-chip:focus-visible, .app-navbar .org-switcher-button:focus-visible, .app-navbar .navbar-toggler:focus-visible,
+.app-navbar .nav-link:focus-visible, .app-navbar .navbar-brand:focus-visible {
+    outline: 2px solid #fff; outline-offset: 2px; box-shadow: none;
+}
+
+/* "Skip to content": hidden until focused, the first stop for keyboard users (QA, A5). */
+.skip-link {
+    position: absolute; left: 1rem; top: -3rem; z-index: 1100; padding: 0.5rem 1rem; border-radius: 0.5rem;
+    background: #fff; color: var(--sa-violet); font-weight: 600; text-decoration: none; transition: top 0.15s;
+}
+.skip-link:focus { top: 0.75rem; outline: 2px solid var(--sa-violet-600); }
+/* The skip link's targets take focus only to move the keyboard there; no ring around the whole page. */
+#content:focus, #admin-content:focus { outline: none; }

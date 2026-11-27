@@ -1,18 +1,11 @@
 @model MembersViewModel
-@using System.Security.Claims
 @{
     ViewData["Title"] = $"Members · {Model.Organization.Name}";
     Layout = "_AdminLayout";
     ViewData["AdminTab"] = "members";
     ViewData["Intro"] = "Everyone who teaches or studies here, and people asking to join.";
-    string? me = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-    // One row per person, with a badge for each role they hold here.
-    var people = Model.Active
-        .GroupBy(m => m.UserId)
-        .OrderBy(g => g.Min(m => m.Role)).ThenBy(g => g.First().User!.LastName).ThenBy(g => g.First().User!.FirstName)
-        .ToList();
-    int CountWith(MembershipRole role) => people.Count(p => p.Any(m => m.Role == role));
+    string me = User.UserId();
+    var people = Model.People;
 }
 
 @section HeadingAside {
@@ -35,16 +28,9 @@
     @if (!Model.Setup.IsComplete)
     {
         int organizationId = Model.Organization.Id;
-        (bool Done, string Label, string Controller, string Action)[] steps =
-        [
-            (Model.Setup.RulesSaved, "Set your timetabling rules", "Rules", "Edit"),
-            (Model.Setup.HasClassrooms, "Add your classrooms", "Classrooms", "Index"),
-            (Model.Setup.HasCourseWithGroup, "Add a course with a group", "Courses", "Index"),
-            (Model.Setup.HasStudents, "Invite and approve students (below)", "Administration", "Members"),
-            (Model.Setup.HasEnrolments, "Enrol students", "Enrolments", "Index"),
-        ];
+        var steps = Model.Setup.Steps;
         <section class="setup-card" aria-labelledby="setup-title">
-            <h2 class="section-title" id="setup-title">Getting started <span class="text-muted small">@steps.Count(s => s.Done) of @steps.Length done</span></h2>
+            <h2 class="section-title" id="setup-title">Getting started <span class="text-muted small">@steps.Count(s => s.Done) of @steps.Count done</span></h2>
             <ol class="setup-steps">
                 @foreach (var step in steps)
                 {
@@ -79,13 +65,13 @@
         @foreach (var membership in Model.Pending)
         {
             ApplicationUser user = membership.User!;
-            string role = membership.Role.ToString().ToLowerInvariant();
+            string role = membership.Role.LowerName();
             <div class="request-row">
                 <div class="request-main">
                     <span class="avatar avatar-lg" aria-hidden="true">@user.Initials</span>
                     <div class="request-who">
                         <p class="mb-0 fw-semibold"><span lang="@user.FullName.Language()">@user.FullName</span> <span class="role-badge role-@role ms-1">@membership.Role</span></p>
-                        <p class="request-meta">@user.Email@(user.PhoneNumber != null ? $" · {user.PhoneNumber}" : "") · asked @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
+                        <p class="request-meta">@Html.Email(user.Email)@(user.PhoneNumber != null ? $" · {user.PhoneNumber}" : "") · asked @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
                     </div>
                     <div class="request-actions">
                         @* A page of its own: it names the person and asks for the reason they'll see. *@
@@ -119,9 +105,9 @@
             <h2 id="people">People</h2>
             <div class="segmented" role="group" aria-label="Show">
                 <button type="button" aria-pressed="true" data-role="">All @people.Count</button>
-                <button type="button" aria-pressed="false" data-role="admin">Admins @CountWith(MembershipRole.Admin)</button>
-                <button type="button" aria-pressed="false" data-role="teacher">Teachers @CountWith(MembershipRole.Teacher)</button>
-                <button type="button" aria-pressed="false" data-role="student">Students @CountWith(MembershipRole.Student)</button>
+                <button type="button" aria-pressed="false" data-role="admin">Admins @Model.CountWith(MembershipRole.Admin)</button>
+                <button type="button" aria-pressed="false" data-role="teacher">Teachers @Model.CountWith(MembershipRole.Teacher)</button>
+                <button type="button" aria-pressed="false" data-role="student">Students @Model.CountWith(MembershipRole.Student)</button>
             </div>
             <div class="flex-grow-1"></div>
             <label class="search-box">
@@ -137,7 +123,7 @@
                     @foreach (var person in people)
                     {
                         ApplicationUser user = person.First().User!;
-                        var roles = person.OrderBy(m => m.Role).Select(m => m.Role.ToString().ToLowerInvariant()).ToList();
+                        var roles = person.OrderBy(m => m.Role).Select(m => m.Role.LowerName()).ToList();
                         <tr data-roles="@string.Join(" ", roles)" data-name="@TextMatch.Key($"{user.FullName} {user.Email} {user.PhoneNumber}")">
                             <td data-label="Name">
                                 <span class="person">
@@ -148,10 +134,10 @@
                             <td data-label="Role">
                                 @foreach (var membership in person.OrderBy(m => m.Role))
                                 {
-                                    <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                                    <partial name="_RoleBadge" model="membership.Role" />
                                 }
                             </td>
-                            <td data-label="Contact">@user.Email<div class="text-muted small">@user.PhoneNumber</div></td>
+                            <td data-label="Contact">@Html.Email(user.Email)<div class="text-muted small">@user.PhoneNumber</div></td>
                         </tr>
                     }
                 </tbody>
@@ -174,13 +160,13 @@
                 <div class="turned-down-row">
                     <div class="turned-down-who">
                         <span class="fw-medium" lang="@user.FullName.Language()">@user.FullName</span>
-                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                        <partial name="_RoleBadge" model="membership.Role" />
                         @if (membership.RejectionReason != null)
                         {
                             <div class="text-muted small">Reason: “@membership.RejectionReason”</div>
                         }
                     </div>
-                    <span class="text-muted">@user.Email</span>
+                    <span class="text-muted">@Html.Email(user.Email)</span>
                     <span class="text-muted text-nowrap">@membership.DecidedAt?.ToLocalTime().ToString("d MMM")</span>
                     <form asp-action="Approve" asp-route-organizationId="@Model.Organization.Id" asp-route-membershipId="@membership.Id" method="post">
                         <button class="btn btn-outline-secondary btn-sm" aria-label="Approve @user.FullName after all">Approve after all</button>

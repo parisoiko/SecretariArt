@@ -11,11 +11,13 @@ namespace SecretariArt.Controllers;
 
 // Base for the administration tabs of one organisation. Every derived route starts with admin/{organizationId}, so
 // the OrganizationAdmin policy (which reads that id) protects every action, and the organisation is loaded once for
-// the shared header and tabs (_AdminHeader).
+// _AdminLayout (sidebar, organisation switcher, page title).
 [Authorize(Policy = Policies.OrganizationAdmin)]
 public abstract class OrganizationAdminController(IOrganizationService organizations) : Controller
 {
     protected int OrganizationId => int.Parse(RouteData.Values["organizationId"]!.ToString()!);
+
+    protected string UserId => User.UserId();
 
     protected Organization Organization => (Organization)ViewData["Organization"]!;
 

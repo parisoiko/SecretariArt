@@ -42,7 +42,7 @@ public interface ICourseService
 
 public class CourseService(
     SecretariArtDbContext db, IRulesService rulesService, IMembershipService memberships, INotificationService notifications,
-    TimeProvider? clock = null) : ICourseService
+    TimeProvider clock) : ICourseService
 {
     // ---- Courses ----
 
@@ -136,23 +136,17 @@ public class CourseService(
 
         var enrolments = await db.Enrolments.Where(e => e.CourseId == courseId).ToListAsync();
         var sessions = await db.ClassSessions.Where(s => s.Group!.CourseId == courseId).ToListAsync();
-        if (sessions.Count > 0)
-        {
-            var people = enrolments.Select(e => e.StudentId).Concat(course.Groups.Where(g => g.TeacherId != null).Select(g => g.TeacherId!));
-            notifications.Add(people, organizationId, $"{await OrganizationNameAsync(organizationId)}: {course.Name} has been cancelled; its classes are off the timetable.", "/schedule");
-        }
-        // Upcoming check-ins are cancelled (and the students told); past ones stay to be billed. Discounts given on
-        // this course go with it; charges already made keep theirs.
-        await BookingService.CancelUpcomingAsync(db, notifications, Clock, sessions.Select(s => s.Id).ToList(), $"{course.Name} has been cancelled");
+        await TakeOffTimetableAsync(organizationId, sessions, enrolments.Select(e => e.StudentId).Concat(course.Groups.Where(g => g.TeacherId != null).Select(g => g.TeacherId!)),
+            $"{course.Name} has been cancelled");
+        // Discounts given on this course go with it; charges already made keep theirs.
         db.StudentDiscounts.RemoveRange(await db.StudentDiscounts.Where(d => d.CourseId == courseId).ToListAsync());
-        db.ClassSessions.RemoveRange(sessions);
         db.Enrolments.RemoveRange(enrolments);
         db.CourseGroups.RemoveRange(course.Groups);
         db.Courses.Remove(course);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"{course.Name} deleted" +
             (enrolments.Count > 0 ? $", with its {DisplayNames.Plural(course.Groups.Count, "group")} and {DisplayNames.Plural(enrolments.Count, "enrolment")}" : "") +
-            (sessions.Count > 0 ? $"; {DisplayNames.Plural(sessions.Count, "class", "classes")} came off the timetable and the people concerned have been told." : "."));
+            OffTheTimetable(sessions.Count));
     }
 
     // ---- Groups ----
@@ -217,7 +211,7 @@ public class CourseService(
         if (teacherChanges && await db.ClassSessions.AnyAsync(s => s.GroupId == groupId))
         {
             string organization = await OrganizationNameAsync(organizationId);
-            string title = $"{group.Course!.Name} (group {group.Name})";
+            string title = group.Title();
             if (newTeacher != null)
             {
                 notifications.Add([newTeacher], organizationId, $"{organization}: you now teach {title}. It's in your Schedule.", "/schedule");
@@ -242,20 +236,14 @@ public class CourseService(
 
         int enrolled = group.Enrolments.Count;
         var sessions = await db.ClassSessions.Where(s => s.GroupId == groupId).ToListAsync();
-        if (sessions.Count > 0)
-        {
-            var people = group.Enrolments.Select(e => e.StudentId).Concat(group.TeacherId == null ? [] : [group.TeacherId]);
-            notifications.Add(people, organizationId,
-                $"{await OrganizationNameAsync(organizationId)}: group {group.Name} of {group.Course!.Name} has been closed; its classes are off the timetable.", "/schedule");
-        }
-        await BookingService.CancelUpcomingAsync(db, notifications, Clock, sessions.Select(s => s.Id).ToList(), $"group {group.Name} of {group.Course!.Name} has been closed");
-        db.ClassSessions.RemoveRange(sessions);
+        await TakeOffTimetableAsync(organizationId, sessions, group.Enrolments.Select(e => e.StudentId).Concat(group.TeacherId == null ? [] : [group.TeacherId]),
+            $"group {group.Name} of {group.Course!.Name} has been closed");
         db.Enrolments.RemoveRange(group.Enrolments);
         db.CourseGroups.Remove(group);
         await db.SaveChangesAsync();
         return ServiceResult.Ok($"Group {group.Name} of {group.Course!.Name} deleted" +
             (enrolled > 0 ? $"; {(enrolled == 1 ? "its 1 student is" : $"its {enrolled} students are")} no longer enrolled in the course" : "") +
-            (sessions.Count > 0 ? $"; {DisplayNames.Plural(sessions.Count, "class", "classes")} came off the timetable and the people concerned have been told." : "."));
+            OffTheTimetable(sessions.Count));
     }
 
     // ---- Bundles ----
@@ -469,7 +457,21 @@ public class CourseService(
     }
 
 
-    private TimeProvider Clock => clock ?? TimeProvider.System;
+    // Classes going because their course or group is: the people concerned are told (when there were classes), upcoming
+    // check-ins are cancelled (and the students told), and past ones stay to be billed.
+    private async Task TakeOffTimetableAsync(int organizationId, List<ClassSession> sessions, IEnumerable<string> people, string what)
+    {
+        if (sessions.Count > 0)
+        {
+            string organization = await OrganizationNameAsync(organizationId);
+            notifications.Add(people, organizationId, $"{organization}: {what}; its classes are off the timetable.", "/schedule");
+        }
+        await BookingService.CancelUpcomingAsync(db, notifications, clock, sessions.Select(s => s.Id).ToList(), what);
+        db.ClassSessions.RemoveRange(sessions);
+    }
+
+    private static string OffTheTimetable(int classes) => classes == 0 ? "."
+        : $"; {DisplayNames.Plural(classes, "class", "classes")} came off the timetable and the people concerned have been told.";
 
     private async Task<string> OrganizationNameAsync(int organizationId) =>
         (await db.Organizations.AsNoTracking().FirstAsync(o => o.Id == organizationId)).Name;

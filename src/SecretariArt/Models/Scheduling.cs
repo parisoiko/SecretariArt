@@ -20,6 +20,9 @@ public class ClassSession
 
     public DateTime UpdatedAt { get; set; }
 
+    // How long the class is. Worked out, not stored.
+    public int Minutes => (int)(Ends - Starts).TotalMinutes;
+
     public bool Overlaps(DayOfWeek day, TimeOnly starts, TimeOnly ends, int gapMinutes = 0) =>
         Day == day && Starts < ends.AddMinutes(gapMinutes) && starts < Ends.AddMinutes(gapMinutes);
 }
@@ -99,6 +102,9 @@ public class DraftSession
     public DayOfWeek Day { get; set; }
     public TimeOnly Starts { get; set; }
     public TimeOnly Ends { get; set; }
+
+    // "Stage Combat (group B)" when the draft was made, so a refusal can still name a group deleted since.
+    public string GroupLabel { get; set; } = "";
 }
 
 // Sessions the generator couldn't place for a group, and why.

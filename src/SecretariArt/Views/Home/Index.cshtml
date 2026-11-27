@@ -1,21 +1,11 @@
 @model HomeViewModel
 @{
     ViewData["Title"] = "Home";
-    var active = Model.Memberships
-        .Where(m => m.Status == MembershipStatus.Active && m.Organization!.Status == OrganizationStatus.Active)
-        // By id: each membership carries its own copy of the organisation, so grouping by the object would give one
-        // card per role.
-        .GroupBy(m => m.OrganizationId)
-        .ToList();
-    var waiting = Model.Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
-    bool isPlatformAdmin = Model.PlatformRequestsWaiting != null;
-    bool hasRequests = waiting.Count > 0 || Model.OrganizationRequests.Count > 0;
-    // Someone with nothing yet gets the welcome (design: "home for a new user"); a platform admin has their own work.
-    bool newcomer = active.Count == 0 && !isPlatformAdmin;
-    string today = Model.Today.ToString("dddd, d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+    var active = Model.ActiveOrganizations;
+    string today = DisplayNames.DayAndDate(Model.Today);
 }
 
-@if (newcomer)
+@if (Model.IsNewcomer)
 {
     <div class="welcome">
         <header class="welcome-head">
@@ -54,7 +44,7 @@
             </section>
         </div>
 
-        @if (hasRequests)
+        @if (Model.HasRequests)
         {
             <div class="welcome-requests">
                 <partial name="_YourRequests" model="Model" />
@@ -75,7 +65,7 @@
 
 <div class="home-grid">
     <div class="home-main">
-        @if (isPlatformAdmin)
+        @if (Model.IsPlatformAdmin)
         {
             <section class="panel" aria-labelledby="platform">
                 <div class="panel-head">
@@ -154,7 +144,7 @@
                                 <div class="org-card-roles">
                                     @foreach (var membership in organization.OrderBy(m => m.Role))
                                     {
-                                        <span class="role-badge role-@membership.Role.ToString().ToLowerInvariant()">@membership.Role</span>
+                                        <partial name="_RoleBadge" model="membership.Role" />
                                     }
                                 </div>
                             </div>
@@ -203,7 +193,7 @@
     </div>
 
     <aside class="home-aside" aria-label="Requests and what's coming up">
-        @if (hasRequests)
+        @if (Model.HasRequests)
         {
             <partial name="_YourRequests" model="Model" />
         }

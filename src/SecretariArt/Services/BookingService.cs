@@ -66,14 +66,15 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
     {
         ClassSession? session = await PerClassSessions()
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.Group!.Enrolments.Any(e => e.StudentId == studentId));
-        if (session == null || !await IsActiveStudentAsync(studentId, session.OrganizationId))
+        if (session == null || !await db.Memberships.HasApprovedAsync(studentId, session.OrganizationId, MembershipRole.Student))
         {
             return ServiceResult.Fail("That class isn't one you can check in to. You can check in to the classes of per-class courses you're enrolled in.");
         }
 
         DateTime now = clock.SchoolNow();
         DateOnly today = DateOnly.FromDateTime(now);
-        string name = $"{session.Group!.Course!.Name} on {DisplayNames.LongDate(date)} at {session.Starts:HH:mm}";
+        Course course = session.Group!.Course!;
+        string name = ClassName(session, date);
         if (date.DayOfWeek != session.Day || date < today || date > today.AddDays(PaymentDefaults.BookingDaysAhead - 1))
         {
             return ServiceResult.Fail($"You can check in to classes in the next {PaymentDefaults.BookingDaysAhead / 7} weeks: choose one from the list.");
@@ -83,7 +84,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
             return ServiceResult.Fail($"{name} has already started, so check-in is closed.");
         }
         OrganizationRules? rules = await db.OrganizationRules.AsNoTracking().FirstOrDefaultAsync(r => r.OrganizationId == session.OrganizationId);
-        if (!InTerm(rules, date))
+        if (!rules.InTerm(date))
         {
             return ServiceResult.Fail($"{DisplayNames.LongDate(date)} is outside the term, so there's no class that day.");
         }
@@ -103,7 +104,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         {
             db.Bookings.Add(new Booking
             {
-                OrganizationId = session.OrganizationId, SessionId = sessionId, CourseId = session.Group.CourseId, Date = date, StudentId = studentId,
+                OrganizationId = session.OrganizationId, SessionId = sessionId, CourseId = course.Id, Date = date, StudentId = studentId,
                 BookedAt = clock.GetUtcNow().UtcDateTime,
             });
         }
@@ -116,12 +117,14 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         }
         await db.SaveChangesAsync();
 
-        PaymentSettings settings = await SettingsAsync(session.OrganizationId);
+        PaymentSettings settings = await db.PaymentSettings.ForOrganizationAsync(session.OrganizationId);
         DateTime deadline = date.ToDateTime(session.Starts).AddHours(-settings.CancelHours);
         // Inside the cancellation window already: say so, rather than give a deadline that has passed (QA, P10).
         if (settings.BillNoShows && now > deadline)
         {
-            return ServiceResult.Ok($"You're checked in to {name}. It's less than {DisplayNames.Plural(settings.CancelHours, "hour")} before the class, so if you cancel now you'll still be billed ({DisplayNames.Money(YourPrice(session.Group.Course, studentId, await DiscountsAsync(studentId)))}).");
+            string price = DisplayNames.Money(YourPrice(course, studentId, await DiscountsAsync(studentId)));
+            return ServiceResult.Ok($"You're checked in to {name}. It's less than {DisplayNames.Plural(settings.CancelHours, "hour")} " +
+                                    $"before the class, so if you cancel now you'll still be billed ({price}).");
         }
         return ServiceResult.Ok(settings.BillNoShows
             ? $"You're checked in to {name}. If you can't come, cancel by {DisplayNames.ShortDate(DateOnly.FromDateTime(deadline))} {deadline:HH:mm}, or you'll be billed for it."
@@ -140,20 +143,24 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         ClassSession session = booking.Session!;
         DateTime now = clock.SchoolNow();
         DateTime starts = booking.Date.ToDateTime(session.Starts);
-        string name = $"{session.Group!.Course!.Name} on {DisplayNames.LongDate(booking.Date)} at {session.Starts:HH:mm}";
+        string name = ClassName(session, booking.Date);
         if (starts <= now)
         {
             return ServiceResult.Fail($"{name} has already started, so the check-in can't be cancelled. If you couldn't come, tell the office.");
         }
 
-        PaymentSettings settings = await SettingsAsync(booking.OrganizationId);
+        PaymentSettings settings = await db.PaymentSettings.ForOrganizationAsync(booking.OrganizationId);
         booking.CancelledAt = clock.GetUtcNow().UtcDateTime;
         booking.CancelledLate = now > starts.AddHours(-settings.CancelHours);
         await db.SaveChangesAsync();
 
-        return ServiceResult.Ok(booking.CancelledLate && settings.BillNoShows
-            ? $"Check-in to {name} cancelled. It was less than {DisplayNames.Plural(settings.CancelHours, "hour")} before the class, so it will still be billed ({DisplayNames.Money(YourPrice(session.Group.Course, studentId, await DiscountsAsync(studentId)))})."
-            : $"Check-in to {name} cancelled.");
+        if (!booking.CancelledLate || !settings.BillNoShows)
+        {
+            return ServiceResult.Ok($"Check-in to {name} cancelled.");
+        }
+        string price = DisplayNames.Money(YourPrice(session.Group!.Course!, studentId, await DiscountsAsync(studentId)));
+        return ServiceResult.Ok($"Check-in to {name} cancelled. It was less than {DisplayNames.Plural(settings.CancelHours, "hour")} " +
+                                $"before the class, so it will still be billed ({price}).");
     }
 
     public async Task<List<ClassDate>> GetForTeacherAsync(string teacherId)
@@ -193,7 +200,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
             .ToListAsync();
         return new ClassRoster(classDate,
             bookings.OrderBy(b => b.CancelledAt != null).ThenBy(b => b.Student!.LastName).ThenBy(b => b.Student!.FirstName).ToList(),
-            await SettingsAsync(organizationId), classDate.Starts <= clock.SchoolNow());
+            await db.PaymentSettings.ForOrganizationAsync(organizationId), classDate.Starts <= clock.SchoolNow());
     }
 
     public async Task<ServiceResult> SetNoShowAsync(int organizationId, int bookingId, bool noShow, string? teacherId)
@@ -252,7 +259,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         {
             ClassSession session = booking.Session!;
             notifications?.Add([booking.StudentId], session.OrganizationId,
-                $"{names[session.OrganizationId]}: Your check-in to {session.Group!.Course!.Name} on {DisplayNames.LongDate(booking.Date)} at {session.Starts:HH:mm} " +
+                $"{names[session.OrganizationId]}: Your check-in to {ClassName(session, booking.Date)} " +
                 $"was cancelled because {why}. You won't be billed for it: check in to another class on your Schedule.",
                 "/schedule?tab=book");
         }
@@ -298,7 +305,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
         {
             for (DateOnly date = from; date <= to; date = date.AddDays(1))
             {
-                if (date.DayOfWeek != session.Day || !InTerm(rules.GetValueOrDefault(session.OrganizationId), date))
+                if (date.DayOfWeek != session.Day || !rules.GetValueOrDefault(session.OrganizationId).InTerm(date))
                 {
                     continue;
                 }
@@ -315,14 +322,7 @@ public class BookingService(SecretariArtDbContext db, TimeProvider clock) : IBoo
     // Places in one class: the group's places, or fewer if the room is smaller.
     private static int Places(ClassSession session) => Math.Min(session.Group!.Capacity, session.Classroom!.Capacity);
 
-    private static bool InTerm(OrganizationRules? rules, DateOnly date) =>
-        (rules?.TermStarts == null || date >= rules.TermStarts) && (rules?.TermEnds == null || date <= rules.TermEnds);
-
-    private Task<bool> IsActiveStudentAsync(string studentId, int organizationId) =>
-        db.Memberships.AnyAsync(m => m.UserId == studentId && m.OrganizationId == organizationId &&
-                                     m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active);
-
-    private async Task<PaymentSettings> SettingsAsync(int organizationId) =>
-        await db.PaymentSettings.AsNoTracking().FirstOrDefaultAsync(s => s.OrganizationId == organizationId)
-        ?? new PaymentSettings { OrganizationId = organizationId };
+    // "Contemporary on Tuesday 2 December at 18:00".
+    private static string ClassName(ClassSession session, DateOnly date) =>
+        $"{session.Group!.Course!.Name} on {DisplayNames.LongDate(date)} at {session.Starts:HH:mm}";
 }

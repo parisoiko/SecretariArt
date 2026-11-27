@@ -293,6 +293,45 @@ student, or moving them to another group, cancels their upcoming check-ins in th
 - Generating with a large organisation (many groups) finishes within about 20 seconds and says how long it took.
 - Every draft page at 390×844.
 
+### Milestone 6: polish (rounds 24–27)
+New: **My account** (account menu → My account, `/account/profile`) to change your name, phone and password; **Forgot your
+password?** on the sign-in page. The QA app doesn't send email: each message is saved as an `.eml` text file in
+`qa/reports/mail/` (newest last by name). Read it with the Read tool to get the reset link. That's the one file you may read
+outside the browser. Also new: security headers (a Content Security Policy), accessibility fixes, emails that wrap at "@"
+and "." on narrow screens, and a refused draft that names the deleted group.
+
+24. **My account.** As an existing teacher and a student:
+    - change first name, last name and phone: the menu greets the new name at once; Members and rosters (as their admin)
+      show the new details; invalid phone, empty names and a 101-character name are refused with clear messages;
+    - change the password: a wrong current password, a short new one and a mismatched confirmation are refused; then
+      change it for real, sign out and in with the new one; the old one fails ("other devices are signed out" can't
+      be tested with one browser profile: skip it).
+    Put every changed password and name in the ledger (Accounts table).
+25. **Forgot password.** For a QA account:
+    - ask for a link from the sign-in page; the confirmation page reads the same for an unknown email (and no `.eml` file
+      appears for it);
+    - open the link from the newest `.eml` file: set a new password, then sign in with it;
+    - the same link a second time: refused, with a way to ask for a new one;
+    - an edited link (change a few characters of `code=`) is refused; an expired one can't be tested (2 hours);
+    - lock an account with 5 wrong passwords, then reset its password: it can sign in straight away;
+    - asking many times in a row from the forgot page eventually says "too many requests" only with `-RealRateLimits`
+      (skip otherwise).
+26. **Accessibility and phone width.** Keyboard only (Tab, Shift+Tab, Enter, Space) through: sign-in, Home, the account
+    menu, Members (approve), Schedule (add a class), Payments (record a payment) and My account. Every control can be
+    reached, the focused one is visibly outlined, and nothing traps focus. On the Schedule week grid, Tab reaches the grid
+    and the arrow keys scroll it on a phone. At 390×844, check that long emails in Members, the platform queue and
+    Enrolments wrap at "@" or "." rather than mid-word.
+27. **Retest G1.** Generate a Fill the gaps draft that places a class for a group, delete that group in another tab, then
+    use the draft: the refusal names it ("<Course> (group X) has been deleted since").
+
+**Milestone 6 probes:**
+- As the admin of A, use the browser's developer tools only if you have them; otherwise skip: posting a form on
+  `/admin/{A}/members` with an extra field `organizationId={B}` must not touch B (this was a real bug, fixed). If you can't
+  add fields to a form, note it as not tested.
+- `/account/profile` signed out: goes to sign-in. `/account/reset-password` without a link: goes to Forgot password.
+- No page shows a browser console error about a Content Security Policy (`browser_console_messages`), especially pages
+  with scripts: Rules, Members (copy link), Payments, Schedule, Generate.
+
 ## Probes (in every round, wherever they apply)
 - **Access control:** a student or teacher opens `/admin/{orgId}/members`; an admin of A opens
   `/admin/{orgIdOfB}/members` and tries to approve someone there; a non-platform user opens
@@ -347,7 +386,10 @@ classes each used draft put in the timetable (replace that organisation's Timeta
 
 ## Retesting
 Before starting new rounds, retest the open findings in the latest run report and mark each one fixed or still
-open. N1 (long emails breaking mid-word on a phone) is known and left as it is.
+open. N1 (long emails breaking mid-word on a phone) and the G1 deletion wording were fixed in milestone 6 (round 26, 27).
+
+## Ledger for milestone 6
+In the Accounts table, keep every account's current password and name (mark changed ones). Note the reset emails you used.
 
 ## Future milestones (to extend as features land)
-Milestone 6 (polish) is next. If you find a link to something unfinished, note it in the report.
+Milestone 6 is the last one planned. If you find a link to something unfinished, note it in the report.

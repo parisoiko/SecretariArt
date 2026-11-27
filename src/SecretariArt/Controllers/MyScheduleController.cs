@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using SecretariArt.Extensions;
+using SecretariArt.Models;
 using SecretariArt.Services;
 using SecretariArt.ViewModels;
 
@@ -14,7 +14,7 @@ public class MyScheduleController(
     ICurrentUserMemberships currentMemberships, IScheduleService schedule, IAvailabilityService availability, IBookingService bookings)
     : Controller
 {
-    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private string UserId => User.UserId();
 
     [HttpGet("")]
     public async Task<IActionResult> Index(string? tab)
@@ -27,39 +27,32 @@ public class MyScheduleController(
 
         // Colours by organisation, in name order, the same on every tab.
         var organizations = (await currentMemberships.GetAsync())
-            .Where(m => m.Status == Models.MembershipStatus.Active && m.Organization!.Status == Models.OrganizationStatus.Active &&
-                        m.Role != Models.MembershipRole.Admin)
+            .Where(m => m.IsLive && m.Role != MembershipRole.Admin)
             .Select(m => m.Organization!).DistinctBy(o => o.Id).OrderBy(o => o.Name).ToList();
         var tones = organizations.Select((o, i) => (o.Id, i)).ToDictionary(x => x.Id, x => x.i);
 
         var toBook = roles.IsStudent ? await bookings.GetUpcomingForStudentAsync(UserId) : [];
         var teaching = roles.IsTeacher ? await bookings.GetForTeacherAsync(UserId) : [];
-        bool canBook = toBook.Count > 0;
-        bool hasCheckIns = teaching.Count > 0;
+        var page = new PersonalScheduleViewModel
+        {
+            Tab = ScheduleTabs.Week, Roles = roles, Tones = tones, Organizations = organizations,
+            CanBook = toBook.Count > 0, HasCheckIns = teaching.Count > 0,
+        };
 
-        if (tab == "availability" && roles.IsTeacher)
+        if (tab == ScheduleTabs.Availability && roles.IsTeacher)
         {
-            return View(new PersonalScheduleViewModel
+            return View(page with { Tab = tab, Places = await availability.GetForTeacherAsync(UserId) });
+        }
+        if (tab == ScheduleTabs.Book && page.CanBook)
+        {
+            return View(page with
             {
-                Tab = "availability", Roles = roles, Tones = tones, Organizations = organizations, CanBook = canBook, HasCheckIns = hasCheckIns,
-                Places = await availability.GetForTeacherAsync(UserId),
+                Tab = tab, Classes = toBook, CancelRules = await bookings.GetSettingsAsync(toBook.Select(c => c.Organization.Id)),
             });
         }
-        if (tab == "book" && canBook)
+        if (tab == ScheduleTabs.CheckIns && page.HasCheckIns)
         {
-            return View(new PersonalScheduleViewModel
-            {
-                Tab = "book", Roles = roles, Tones = tones, Organizations = organizations, CanBook = true, HasCheckIns = hasCheckIns,
-                Classes = toBook, CancelRules = await bookings.GetSettingsAsync(toBook.Select(c => c.Organization.Id)),
-            });
-        }
-        if (tab == "check-ins" && hasCheckIns)
-        {
-            return View(new PersonalScheduleViewModel
-            {
-                Tab = "check-ins", Roles = roles, Tones = tones, Organizations = organizations, CanBook = canBook, HasCheckIns = true,
-                Classes = teaching,
-            });
+            return View(page with { Tab = tab, Classes = teaching });
         }
 
         var sessions = await schedule.GetPersonalAsync(UserId);
@@ -74,11 +67,7 @@ public class MyScheduleController(
 
         WeekGridModel grid = WeekGridModel.Fit(blocks, [], new TimeOnly(9, 0), new TimeOnly(18, 0), "My week");
         grid.EmptyText = "No classes yet. When your organisation puts your classes in its timetable, they appear here.";
-        return View(new PersonalScheduleViewModel
-        {
-            Tab = "week", Roles = roles, Tones = tones, Organizations = organizations, Sessions = sessions, Grid = grid,
-            CanBook = canBook, HasCheckIns = hasCheckIns,
-        });
+        return View(page with { Sessions = sessions, Grid = grid });
     }
 
     [HttpPost("availability")]
@@ -87,14 +76,14 @@ public class MyScheduleController(
         this.Report(ModelState.IsValid
             ? await availability.AddAsync(UserId, model.ToInput())
             : ServiceResult.Fail("Choose the organisation and the day, and enter both times."));
-        return RedirectToAction(nameof(Index), new { tab = "availability" });
+        return RedirectToAction(nameof(Index), new { tab = ScheduleTabs.Availability });
     }
 
     [HttpPost("availability/{availabilityId:int}/remove")]
     public async Task<IActionResult> RemoveAvailability(int availabilityId)
     {
         this.Report(await availability.RemoveAsync(UserId, availabilityId));
-        return RedirectToAction(nameof(Index), new { tab = "availability" });
+        return RedirectToAction(nameof(Index), new { tab = ScheduleTabs.Availability });
     }
 
     // ---- Checking in to per-class courses ----
@@ -103,14 +92,14 @@ public class MyScheduleController(
     public async Task<IActionResult> Book(int sessionId, DateOnly date)
     {
         this.Report(await bookings.BookAsync(UserId, sessionId, date));
-        return RedirectToAction(nameof(Index), new { tab = "book" });
+        return RedirectToAction(nameof(Index), new { tab = ScheduleTabs.Book });
     }
 
     [HttpPost("bookings/{bookingId:int}/cancel")]
     public async Task<IActionResult> CancelBooking(int bookingId)
     {
         this.Report(await bookings.CancelAsync(UserId, bookingId));
-        return RedirectToAction(nameof(Index), new { tab = "book" });
+        return RedirectToAction(nameof(Index), new { tab = ScheduleTabs.Book });
     }
 
     // ---- A teacher's check-in lists ----

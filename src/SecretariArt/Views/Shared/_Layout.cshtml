@@ -5,6 +5,7 @@
     <partial name="_Head" />
 </head>
 <body class="app">
+    <a class="skip-link" href="#@(ViewData["SkipTo"] as string ?? "content")">Skip to content</a>
     <nav class="navbar navbar-expand-lg app-navbar" aria-label="Main">
         <div class="container">
             <a class="navbar-brand" asp-controller="Home" asp-action="Index" aria-label="SecretariArt home">
@@ -27,6 +28,8 @@
                         @User.FindFirstValue(ClaimTypes.GivenName)
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index"><i class="bi bi-person-gear me-2" aria-hidden="true"></i>My account</a></li>
+                        <li><hr class="dropdown-divider" /></li>
                         <li><a class="dropdown-item" asp-controller="Organizations" asp-action="Join"><i class="bi bi-person-plus me-2" aria-hidden="true"></i>Join an organisation</a></li>
                         <li><a class="dropdown-item" asp-controller="Organizations" asp-action="RequestOrganization"><i class="bi bi-building-add me-2" aria-hidden="true"></i>Register an organisation</a></li>
                         <li><hr class="dropdown-divider" /></li>
@@ -41,7 +44,7 @@
         </div>
     </nav>
 
-    <main class="container py-4">
+    <main class="container py-4" id="content" tabindex="-1">
         <partial name="_Messages" />
         @RenderBody()
     </main>

@@ -18,7 +18,7 @@ public interface IEnrolmentService
 }
 
 public class EnrolmentService(
-    SecretariArtDbContext db, IMembershipService memberships, TimeProvider clock, INotificationService? notifications = null) : IEnrolmentService
+    SecretariArtDbContext db, IMembershipService memberships, TimeProvider clock, INotificationService notifications) : IEnrolmentService
 {
     public async Task<List<StudentEnrolments>> GetStudentsAsync(int organizationId)
     {
@@ -241,7 +241,7 @@ public class EnrolmentService(
         await CancelCheckInsAsync(enrolment, $"you're no longer enrolled in {enrolment.Course!.Name}");
         db.Enrolments.Remove(enrolment);
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"{enrolment.Student!.FullName} is no longer enrolled in {enrolment.Course!.Name} (group {enrolment.Group!.Name}).");
+        return ServiceResult.Ok($"{enrolment.Student!.FullName} is no longer enrolled in {enrolment.Group!.Title()}.");
     }
 
     // Leaving a group (or moving to another) cancels the student's upcoming check-ins to its classes.

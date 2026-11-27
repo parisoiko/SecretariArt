@@ -10,10 +10,7 @@ public interface ICurrentUserMemberships
 }
 
 // What the signed-in user is, across all their organisations. Drives the navigation and the home page.
-public record UserRoles(bool IsAdmin, bool IsTeacher, bool IsStudent)
-{
-    public bool HasAnyRole => IsAdmin || IsTeacher || IsStudent;
-}
+public record UserRoles(bool IsAdmin, bool IsTeacher, bool IsStudent);
 
 // Scoped: the layout, the navigation and the page all ask during one request, but the database is queried once.
 public class CurrentUserMemberships(IHttpContextAccessor httpContextAccessor, IMembershipService memberships)
@@ -36,7 +33,7 @@ public class CurrentUserMemberships(IHttpContextAccessor httpContextAccessor, IM
     public async Task<UserRoles> GetRolesAsync()
     {
         var active = (await GetAsync())
-            .Where(m => m.Status == MembershipStatus.Active && m.Organization!.Status == OrganizationStatus.Active)
+            .Where(m => m.IsLive)
             .ToList();
 
         return new UserRoles(

@@ -28,3 +28,13 @@ jobs:
       # Unit tests + integration tests (in-memory SQLite, so no SQL Server is needed)
       - name: Test
         run: dotnet test SecretariArt.slnx --no-build -c Release --verbosity normal
+
+  # The container image builds (Dockerfile); it isn't pushed anywhere.
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t secretariart:ci .

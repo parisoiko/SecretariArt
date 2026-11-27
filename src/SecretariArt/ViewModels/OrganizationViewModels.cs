@@ -20,7 +20,7 @@ public class OrganizationRequestViewModel
     public string ContactEmail { get; set; } = "";
 
     [Display(Name = "Contact phone (optional)")]
-    [RegularExpression(@"^\+?[0-9][0-9 ()\-]{6,19}$",
+    [RegularExpression(Messages.PhonePattern,
         ErrorMessage = "Enter a phone number with 7 to 20 digits, e.g. +30 210 123 4567.")]
     public string? ContactPhone { get; set; }
 }
@@ -56,6 +56,21 @@ public class HomeViewModel
 
     // Only for platform admins: organisation requests waiting for a decision.
     public int? PlatformRequestsWaiting { get; init; }
+
+    // One card per organisation where this person is live, with their roles there. Grouped by id: each membership
+    // carries its own copy of the organisation, so grouping by the object would give one card per role.
+    public IReadOnlyList<IGrouping<int, Membership>> ActiveOrganizations =>
+        Memberships.Where(m => m.IsLive).GroupBy(m => m.OrganizationId).ToList();
+
+    // Join requests this person sent that are still pending, or were turned down.
+    public IReadOnlyList<Membership> WaitingMemberships => Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
+
+    public bool IsPlatformAdmin => PlatformRequestsWaiting != null;
+
+    public bool HasRequests => WaitingMemberships.Count > 0 || OrganizationRequests.Count > 0;
+
+    // Someone with nothing yet gets the welcome; a platform admin has their own work.
+    public bool IsNewcomer => ActiveOrganizations.Count == 0 && !IsPlatformAdmin;
 }
 
 public class MembersViewModel
@@ -71,13 +86,33 @@ public class MembersViewModel
     public required string InviteLink { get; init; }
 
     public required SetupProgress Setup { get; init; }
+
+    // One row per person, with a badge for each role they hold here: admins first, then by name.
+    public IReadOnlyList<IGrouping<string, Membership>> People => Active
+        .GroupBy(m => m.UserId)
+        .OrderBy(g => g.Min(m => m.Role)).ThenBy(g => g.First().User!.LastName).ThenBy(g => g.First().User!.FirstName)
+        .ToList();
+
+    public int CountWith(MembershipRole role) => Active.Where(m => m.Role == role).Select(m => m.UserId).Distinct().Count();
 }
 
 // The "Getting started" checklist on the Members page, hidden once everything is done.
 public record SetupProgress(bool RulesSaved, bool HasClassrooms, bool HasCourseWithGroup, bool HasStudents, bool HasEnrolments)
 {
     public bool IsComplete => RulesSaved && HasClassrooms && HasCourseWithGroup && HasStudents && HasEnrolments;
+
+    // The checklist in order, each step with the admin page that does it.
+    public IReadOnlyList<SetupStep> Steps =>
+    [
+        new(RulesSaved, "Set your timetabling rules", "Rules", "Edit"),
+        new(HasClassrooms, "Add your classrooms", "Classrooms", "Index"),
+        new(HasCourseWithGroup, "Add a course with a group", "Courses", "Index"),
+        new(HasStudents, "Invite and approve students (below)", "Administration", "Members"),
+        new(HasEnrolments, "Enrol students", "Enrolments", "Index"),
+    ];
 }
+
+public record SetupStep(bool Done, string Label, string Controller, string Action);
 
 // The reject page, for a join request or an organisation request: the reason is shown to the person turned down.
 public class RejectViewModel

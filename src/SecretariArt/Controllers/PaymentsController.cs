@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using SecretariArt.Extensions;
 using SecretariArt.Models;
@@ -13,7 +12,6 @@ public class PaymentsController(
     IOrganizationService organizations, IBillingService billing, IPaymentSetupService setup, IBookingService bookings, TimeProvider clock)
     : OrganizationAdminController(organizations)
 {
-    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
     // ---- Books ----
 
@@ -41,7 +39,7 @@ public class PaymentsController(
         {
             Statement = statement, NamedDiscounts = await setup.GetDiscountsAsync(OrganizationId),
             Courses = prices.Courses, Bundles = prices.Bundles,
-            NewCharge = new ChargeFormViewModel { DueOn = statement.Today.AddDays(BillingService.LateChargeDays) },
+            NewCharge = new ChargeFormViewModel { DueOn = statement.Today.AddDays(PaymentDefaults.LateChargeDays) },
         };
         refused?.Invoke(model);
         return View(nameof(Student), model);

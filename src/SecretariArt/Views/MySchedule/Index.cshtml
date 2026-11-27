@@ -1,7 +1,7 @@
 @model PersonalScheduleViewModel
 @inject TimeProvider Clock
 @{
-    ViewData["Title"] = Model.Tab switch { "availability" => "Availability", "book" => "Check in to classes", "check-ins" => "Who's coming", _ => "Schedule" };
+    ViewData["Title"] = Model.Tab switch { ScheduleTabs.Availability => "Availability", ScheduleTabs.Book => "Check in to classes", ScheduleTabs.CheckIns => "Who's coming", _ => "Schedule" };
     var clashes = Model.Sessions.Where(s => s.Clash != null).ToList();
 }
 
@@ -13,41 +13,41 @@
 <nav aria-label="Schedule sections">
     <ul class="nav nav-tabs mb-4">
         <li class="nav-item">
-            <a class="nav-link @(Model.Tab == "week" ? "active" : "")" aria-current="@(Model.Tab == "week" ? "page" : null)"
+            <a class="nav-link @(Model.Tab == ScheduleTabs.Week ? "active" : "")" aria-current="@(Model.Tab == ScheduleTabs.Week ? "page" : null)"
                asp-action="Index"><i class="bi bi-calendar-week" aria-hidden="true"></i> My week</a>
         </li>
         @if (Model.Roles.IsTeacher)
         {
             <li class="nav-item">
-                <a class="nav-link @(Model.Tab == "availability" ? "active" : "")" aria-current="@(Model.Tab == "availability" ? "page" : null)"
-                   asp-action="Index" asp-route-tab="availability"><i class="bi bi-calendar-check" aria-hidden="true"></i> Availability</a>
+                <a class="nav-link @(Model.Tab == ScheduleTabs.Availability ? "active" : "")" aria-current="@(Model.Tab == ScheduleTabs.Availability ? "page" : null)"
+                   asp-action="Index" asp-route-tab="@ScheduleTabs.Availability"><i class="bi bi-calendar-check" aria-hidden="true"></i> Availability</a>
             </li>
         }
         @if (Model.CanBook)
         {
             <li class="nav-item">
-                <a class="nav-link @(Model.Tab == "book" ? "active" : "")" aria-current="@(Model.Tab == "book" ? "page" : null)"
-                   asp-action="Index" asp-route-tab="book"><i class="bi bi-person-check" aria-hidden="true"></i> Check in to classes</a>
+                <a class="nav-link @(Model.Tab == ScheduleTabs.Book ? "active" : "")" aria-current="@(Model.Tab == ScheduleTabs.Book ? "page" : null)"
+                   asp-action="Index" asp-route-tab="@ScheduleTabs.Book"><i class="bi bi-person-check" aria-hidden="true"></i> Check in to classes</a>
             </li>
         }
         @if (Model.HasCheckIns)
         {
             <li class="nav-item">
-                <a class="nav-link @(Model.Tab == "check-ins" ? "active" : "")" aria-current="@(Model.Tab == "check-ins" ? "page" : null)"
-                   asp-action="Index" asp-route-tab="check-ins"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Who's coming</a>
+                <a class="nav-link @(Model.Tab == ScheduleTabs.CheckIns ? "active" : "")" aria-current="@(Model.Tab == ScheduleTabs.CheckIns ? "page" : null)"
+                   asp-action="Index" asp-route-tab="@ScheduleTabs.CheckIns"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Who's coming</a>
             </li>
         }
     </ul>
 </nav>
 
-@if (Model.Tab == "week")
+@if (Model.Tab == ScheduleTabs.Week)
 {
     @if (Model.Organizations.Count > 1)
     {
         <ul class="legend mb-3" aria-label="Organisations">
             @foreach (var organization in Model.Organizations)
             {
-                <li><span class="legend-swatch tone-@(Model.Tones[organization.Id] % 6)" aria-hidden="true"></span> @organization.Name</li>
+                <li><span class="legend-swatch @DisplayNames.ToneClass(Model.Tones[organization.Id])" aria-hidden="true"></span> @organization.Name</li>
             }
         </ul>
     }
@@ -69,7 +69,7 @@
 
     <partial name="_WeekGrid" model="Model.Grid" />
 }
-else if (Model.Tab == "book")
+else if (Model.Tab == ScheduleTabs.Book)
 {
     <p class="text-muted">These courses are paid per class. Check in to each class you'll come to, up to four weeks ahead;
        it keeps your place, and it's how you're billed.</p>
@@ -84,7 +84,7 @@ else if (Model.Tab == "book")
                 var rules = Model.CancelRules[item.Organization.Id];
                 var cancelBy = item.Starts.AddHours(-rules.CancelHours);
                 bool lateNow = rules.BillNoShows && Clock.SchoolNow() > cancelBy;
-                <li class="class-row tone-@(Model.Tones.GetValueOrDefault(item.Organization.Id) % 6) @(item.Mine != null ? "booked" : "")">
+                <li class="class-row @DisplayNames.ToneClass(Model.Tones.GetValueOrDefault(item.Organization.Id)) @(item.Mine != null ? "booked" : "")">
                     <div class="class-time">@session.Starts.ToString("HH:mm")<span>–@session.Ends.ToString("HH:mm")</span></div>
                     <div class="class-what">
                         <strong lang="@session.Group!.Course!.Name.Language()">@session.Group.Course.Name</strong>
@@ -139,14 +139,13 @@ else if (Model.Tab == "book")
         </ul>
     }
 }
-else if (Model.Tab == "check-ins")
+else if (Model.Tab == ScheduleTabs.CheckIns)
 {
     <p class="text-muted">Your per-class classes, from last week to two weeks ahead. Open one to see who checked in, and after
        the class, mark anyone who didn't come.</p>
     <partial name="_ClassDates" model="@(new ClassDatesModel(Model.Classes, c => Url.Action("Roster", "MySchedule", new { organizationId = c.Organization.Id, sessionId = c.Session.Id, date = c.Date.ToString("yyyy-MM-dd") })!))" />
 }
-else
-
+else @* Availability *@
 {
     <p class="text-muted">Tell each organisation when you can teach there. Admins see it when they build the timetable,
        and classes outside it are flagged to them.</p>
@@ -156,7 +155,7 @@ else
         var rules = place.Rules;
         <section class="form-card mb-4" aria-labelledby="place-@place.Organization.Id">
             <h2 class="section-title" id="place-@place.Organization.Id">
-                <span class="legend-swatch tone-@(Model.Tones.GetValueOrDefault(place.Organization.Id) % 6)" aria-hidden="true"></span>
+                <span class="legend-swatch @DisplayNames.ToneClass(Model.Tones.GetValueOrDefault(place.Organization.Id))" aria-hidden="true"></span>
                 @place.Organization.Name
             </h2>
             <p class="text-muted small">Teaching there happens @rules.TeachingDays.Display(), @rules.DayStarts.ToString("HH:mm")–@rules.DayEnds.ToString("HH:mm").</p>

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SecretariArt.Data;
+using SecretariArt.Services;
 
 namespace SecretariArt.Tests.Integration;
 
@@ -16,7 +17,7 @@ namespace SecretariArt.Tests.Integration;
 public class SecretariArtFactory : WebApplicationFactory<Program>
 {
     protected virtual IEnumerable<(string Limit, int Permits)> Limits =>
-        new[] { "Global", "SignIn", "Register", "InviteCodes", "OrganizationRequests", "Generation" }.Select(l => (l, 100_000));
+        new[] { "Global", "SignIn", "Register", "InviteCodes", "OrganizationRequests", "Generation", "AccountRecovery" }.Select(l => (l, 100_000));
 
     // An in-memory SQLite database lives as long as one connection to it stays open.
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
@@ -41,8 +42,13 @@ public class SecretariArtFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<SecretariArtDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<SecretariArtDbContext>>();
             services.AddDbContext<SecretariArtDbContext>(options => options.UseSqlite(_connection));
+            // Emails are kept here for the tests to read, instead of written to App_Data.
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Emails);
         });
     }
+
+    public CapturedEmails Emails { get; } = new();
 
     public HttpClient CreateBrowser(bool followRedirects = true) =>
         CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = followRedirects });
@@ -105,5 +111,21 @@ public static class BrowserExtensions
         // A new account belongs to no organisation yet: the welcome page.
         Assert.Contains($"Welcome, {firstName}", await response.Content.ReadAsStringAsync());
         return email;
+    }
+}
+
+public class CapturedEmails : IEmailSender
+{
+    private readonly List<EmailMessage> _sent = [];
+
+    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
+    {
+        lock (_sent) _sent.Add(message);
+        return Task.CompletedTask;
+    }
+
+    public List<EmailMessage> To(string email)
+    {
+        lock (_sent) return _sent.Where(m => m.To == email).ToList();
     }
 }

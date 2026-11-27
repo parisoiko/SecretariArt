@@ -19,7 +19,7 @@
 }
 else
 {
-    <div class="week-grid" role="group" aria-label="@Model.Label" style="--day-count: @Model.Days.Count">
+    <div class="week-grid" role="group" aria-label="@Model.Label" tabindex="0" style="--day-count: @Model.Days.Count">
         <div class="week-head">
             <div></div>
             @foreach (var day in Model.Days)
@@ -43,20 +43,17 @@ else
                     }
                     @foreach (var (block, lane, lanes) in placed.Where(p => p.Block.Day == day))
                     {
-                        string css = $"week-block tone-{block.Tone % 6}{(block.Alert != null ? " clash" : block.Note != null ? " note" : "")}" +
-                                     ((block.Ends - block.Starts).TotalMinutes switch { < 60 => " short", < 90 => " medium", < 120 => " compact", _ => "" });
+                        string css = $"week-block {block.StateClasses}{block.SizeClass}";
                         string style = $"top: {Top(block.Starts)}; height: {Height(block)}; left: calc({lane} * 100% / {lanes}); width: calc(100% / {lanes} - 3px);";
-                        string tip = $"{block.Title}, {block.Day} {block.Starts:HH:mm}–{block.Ends:HH:mm}" +
-                                     (block.Line2 != null ? $", {block.Line2}" : "") + (block.Line3 != null ? $", {block.Line3}" : "") + (block.Alert != null ? $". {block.Alert}" : "") + (block.Note != null ? $". {block.Note}" : "");
                         if (block.Url != null)
                         {
-                            <a class="@css" style="@style" href="@block.Url" title="@tip">
+                            <a class="@css" style="@style" href="@block.Url" title="@block.Tooltip">
                                 <partial name="_WeekBlockBody" model="block" />
                             </a>
                         }
                         else
                         {
-                            <div class="@css" style="@style" title="@tip">
+                            <div class="@css" style="@style" title="@block.Tooltip">
                                 <partial name="_WeekBlockBody" model="block" />
                             </div>
                         }
@@ -73,7 +70,7 @@ else
             <ul class="agenda-list">
                 @foreach (var block in Model.Blocks.Where(b => b.Day == day).OrderBy(b => b.Starts))
                 {
-                    <li class="agenda-item tone-@(block.Tone % 6)@(block.Alert != null ? " clash" : block.Note != null ? " note" : "")">
+                    <li class="agenda-item @block.StateClasses">
                         <span class="agenda-time">@block.Starts.ToString("HH:mm")–@block.Ends.ToString("HH:mm")</span>
                         <span class="agenda-text">
                             @if (block.Url != null)

@@ -88,7 +88,7 @@
         {
             <p class="small text-muted">
                 <i class="bi bi-percent" aria-hidden="true"></i>
-                Your discounts: @string.Join("; ", statement.Discounts.Select(d => $"{d.Label} {d.EffectivePercent:0.##}% on {d.Course?.Name ?? d.Bundle?.Name ?? "everything"}")).
+                Your discounts: @string.Join("; ", statement.Discounts.Select(d => $"{d.Label} {d.EffectivePercent:0.##}% on {d.AppliesTo}")).
             </p>
         }
 

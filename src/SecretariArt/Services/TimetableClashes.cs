@@ -28,7 +28,7 @@ public static class TimetableClashes
 
         ClassSession? clash = (await SessionsOf(db, groupIds))
             .FirstOrDefault(s => newSessions.Any(n => n.Overlaps(s.Day, s.Starts, s.Ends)));
-        return clash == null ? null : $"{clash.Group!.Course!.Name} (group {clash.Group.Name}) on {clash.Day} {clash.Starts:HH:mm}–{clash.Ends:HH:mm}";
+        return clash == null ? null : $"{clash.Group!.Title()} on {clash.When()}";
     }
 
     // Another class the teacher teaches (in any organisation, in the same weeks) at the same time as the group's.
@@ -55,8 +55,8 @@ public static class TimetableClashes
             return null;
         }
         return clash.OrganizationId == group.OrganizationId
-            ? $"{clash.Group!.Course!.Name} (group {clash.Group.Name}) on {clash.Day} {clash.Starts:HH:mm}–{clash.Ends:HH:mm}"
-            : $"a class at another organisation on {clash.Day} {clash.Starts:HH:mm}–{clash.Ends:HH:mm}";
+            ? $"{clash.Group!.Title()} on {clash.When()}"
+            : $"a class at another organisation on {clash.When()}";
     }
 
     private static Task<List<ClassSession>> SessionsOf(SecretariArtDbContext db, IEnumerable<int> groupIds)

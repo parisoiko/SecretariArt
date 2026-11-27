@@ -41,14 +41,14 @@ else
 {
     <div class="table-responsive table-card">
         <table class="table align-middle mb-0 table-stack">
-            <thead><tr><th>Student</th><th>Courses</th><th></th></tr></thead>
+            <thead><tr><th>Student</th><th>Courses</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 @foreach (var entry in Model.Students)
                 {
                     <tr>
                         <td data-label="Student">
                             <strong lang="@entry.Student.FullName.Language()">@entry.Student.FullName</strong>
-                            <div class="text-muted small">@entry.Student.Email</div>
+                            <div class="text-muted small">@Html.Email(entry.Student.Email)</div>
                         </td>
                         <td data-label="Courses">
                             @if (entry.Enrolments.Count == 0)

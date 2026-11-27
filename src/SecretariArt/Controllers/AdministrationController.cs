@@ -22,8 +22,7 @@ public class AdministrationController(
     public async Task<IActionResult> Index()
     {
         var administered = (await currentMemberships.GetAsync())
-            .Where(m => m.Role == MembershipRole.Admin && m.Status == MembershipStatus.Active &&
-                        m.Organization!.Status == OrganizationStatus.Active)
+            .Where(m => m.IsLive && m.Role == MembershipRole.Admin)
             .Select(m => m.Organization!)
             .ToList();
 
@@ -37,12 +36,12 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpGet("{organizationId:int}/members")]
-    public async Task<IActionResult> Members(int organizationId)
+    public async Task<IActionResult> Members([FromRoute] int organizationId)
     {
         Organization organization = (await organizations.FindAsync(organizationId))!;
         List<Membership> all = await memberships.GetForOrganizationAsync(organizationId);
         List<CourseOverview> courseList = await courses.GetAllAsync(organizationId);
-        ViewData["Organization"] = organization; // for the shared header and tabs
+        ViewData["Organization"] = organization; // for _AdminLayout (sidebar, switcher, title)
 
         return View(new MembersViewModel
         {
@@ -64,7 +63,7 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/members/{membershipId:int}/approve")]
-    public async Task<IActionResult> Approve(int organizationId, int membershipId, string? returnUrl = null)
+    public async Task<IActionResult> Approve([FromRoute] int organizationId, [FromRoute] int membershipId, string? returnUrl = null)
     {
         this.Report(await memberships.ApproveAsync(organizationId, membershipId));
         // Approving from the Home page ("Needs your attention") goes back there.
@@ -74,7 +73,7 @@ public class AdministrationController(
     // Rejecting has its own page: the admin must give a reason, which the person then sees on their Home page.
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpGet("{organizationId:int}/members/{membershipId:int}/reject")]
-    public async Task<IActionResult> Reject(int organizationId, int membershipId)
+    public async Task<IActionResult> Reject([FromRoute] int organizationId, [FromRoute] int membershipId)
     {
         Membership? request = await memberships.FindPendingAsync(organizationId, membershipId);
         return request == null ? RequestGone(organizationId) : View("Reject", Describe(request, new RejectViewModel()));
@@ -82,7 +81,7 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/members/{membershipId:int}/reject")]
-    public async Task<IActionResult> Reject(int organizationId, int membershipId, RejectViewModel model)
+    public async Task<IActionResult> Reject([FromRoute] int organizationId, [FromRoute] int membershipId, RejectViewModel model)
     {
         if (!ModelState.IsValid)
         {
@@ -96,7 +95,7 @@ public class AdministrationController(
 
     [Authorize(Policy = Policies.OrganizationAdmin)]
     [HttpPost("{organizationId:int}/invite-code")]
-    public async Task<IActionResult> RegenerateInviteCode(int organizationId)
+    public async Task<IActionResult> RegenerateInviteCode([FromRoute] int organizationId)
     {
         string code = await organizations.RegenerateInviteCodeAsync(organizationId);
         TempData["Message"] = $"New invite code: {code}. The old code and link no longer work.";
@@ -105,7 +104,7 @@ public class AdministrationController(
 
     private RejectViewModel Describe(Membership request, RejectViewModel model)
     {
-        string role = request.Role.ToString().ToLowerInvariant();
+        string role = request.Role.LowerName();
         model.Heading = $"Reject {request.User!.FullName}'s request";
         model.Details = $"{request.User.FullName} ({request.User.Email}) asked to join as a {role}. " +
                         $"They'll see your reason and can ask again after {RejectionReasons.RejoinWait.TotalMinutes:0} minutes.";

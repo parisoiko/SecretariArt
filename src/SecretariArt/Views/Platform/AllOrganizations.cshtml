@@ -40,7 +40,7 @@ else
                     <tr>
                         <td data-label="Organisation"><strong>@organization.Name</strong><div class="text-muted small">@organization.City</div></td>
                         <td data-label="Type">@organization.Type.Display()</td>
-                        <td data-label="Requested by">@organization.RequestedBy!.FullName<div class="text-muted small">@organization.RequestedBy.Email</div></td>
+                        <td data-label="Requested by">@organization.RequestedBy!.FullName<div class="text-muted small">@Html.Email(organization.RequestedBy.Email)</div></td>
                         <td data-label="Status">
                             <span class="status-pill status-@organization.Status.ToString().ToLowerInvariant()">@Label(organization.Status)</span>
                             @if (organization.RejectionReason != null)

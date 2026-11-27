@@ -10,7 +10,8 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
   Models, Services, ViewComponents, ViewModels, Views, wwwroot
 - `tests/SecretariArt.Tests/`: service tests on in-memory SQLite (`Services/`) and `WebApplicationFactory` integration
   tests that drive the real forms (`Integration/`, shared `SecretariArtFactory`)
-- `.github/workflows/ci.yml`: build + test on every push to `main`
+- `.github/workflows/ci.yml`: build + test, and build the Docker image, on every push to `main`
+- `docs/`: NOTES.md (design decisions) and README screenshots; `Dockerfile` + `docker-compose.yml` at the root
 
 ## Commands (from the repo root)
 - Run: `dotnet run --project src/SecretariArt` (http://localhost:5100) or F5 in VS Code. Start-up migrates the database and
@@ -48,12 +49,23 @@ deadlines. ASP.NET Core 10 MVC, EF Core 10 (SQL Server LocalDB), ASP.NET Core Id
 ## Conventions
 - Registrations live in `Extensions/ServiceCollectionExtensions.cs`; `Program.cs` stays short.
 - Business rules live in services returning `ServiceResult`; controllers stay thin.
+- Shared helpers, use them rather than writing the logic again: `MembershipQueries` (`Live()`, `Approved(role)`,
+  `HasApprovedAsync`) and `Membership.IsLive` for "who counts here"; `PaymentQueries` (settings or defaults, per-class
+  courses); `DisplayNames` (`group.Title()`, `session.When()`, `TimeRange`, `WeekIndex`, `ToneClass`, `Truncate`);
+  `User.UserId()`; `ChargeKeys` (stored formats, never change them); `PaymentDefaults` for payment constants.
 - Primary constructors for injection; `TimeProvider` for "now" (testable).
 - Enums are stored as strings. Read every migration before applying it.
 - Rate limits (`Extensions/RateLimiting.cs`, section `RateLimits`): a global flood guard per person or IP, and stricter
   sliding windows on sign-in and registration (per IP), invite codes and organisation requests (per person). Add
-  `[EnableRateLimiting(...)]` to any new action someone could script. Behind a reverse proxy, configure forwarded headers
-  first, or every visitor shares the proxy's address. Tests raise the limits (`SecretariArtFactory.Limits`).
+  `[EnableRateLimiting(...)]` to any new action someone could script. Behind a reverse proxy, set `ForwardedHeaders:*`
+  (`Extensions/HostingExtensions.cs`), or every visitor shares the proxy's address. Tests raise the limits
+  (`SecretariArtFactory.Limits`).
+- Admin actions read the organisation from the route only (`OrganizationId`, or `[FromRoute]`): MVC binds a posted
+  field first. The policy refuses a request whose form or query names another organisation.
+- Content Security Policy (`Extensions/SecurityHeaders.cs`): scripts only from the site, jsdelivr and inline blocks with
+  the request's nonce (added by `ScriptNonceTagHelper`); no inline event handlers (`onclick=`), no `javascript:` URLs.
+- Emails go through `IEmailSender`; the only implementation saves `.eml` files (`Email:PickupDirectory`). Links in
+  emails use `Email:PublicUrl`. Show emails in views with `@Html.Email(...)` (wraps at "@" and ".").
 - `[Required]` is always explicit on view models. State-changing actions are POST + anti-forgery (global filter).
   A `<form>` with a hand-written `action` gets no token unless it has `asp-antiforgery="true"`.
 - Comments explain *why*. UI text is British English ("organisation").
@@ -74,4 +86,5 @@ bundle fees in every state (Eleftheria overdue) and Dimitra's Contemporary check
 Plan with milestones: 1 accounts & organisations (done) · 2 administration (rules, classrooms, courses/groups/bundles,
 enrolments; done) · 3 schedules by hand (availability, editor with conflict checks, calendars, notifications; done) ·
 4 payments (prices, check-ins, discounts, charges, books; done) · 5 automatic generation with Google OR-Tools CP-SAT
-(drafts: fill the gaps or start over; done) · 6 polish.
+(drafts: fill the gaps or start over; done) · 6 polish (account self-service, security review, accessibility,
+deployment: Dockerfile, /health; docs/NOTES.md and README; done).

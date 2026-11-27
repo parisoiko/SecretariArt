@@ -4,46 +4,6 @@ using SecretariArt.Models;
 
 namespace SecretariArt.Services;
 
-public record PaymentInput(decimal Amount, DateOnly PaidOn, PaymentMethod Method, string? Reference);
-
-public record ChargeInput(string Description, decimal Amount, DateOnly DueOn);
-
-// Classes checked in to this month, not billed yet: shown as "so far" until the month is billed.
-public record ClassesSoFar(Course Course, int Classes, decimal Amount);
-
-// One student's account at one organisation.
-public record Statement(
-    Organization Organization, ApplicationUser Student, IReadOnlyList<Charge> Charges, IReadOnlyList<StudentDiscount> Discounts,
-    IReadOnlyList<Enrolment> Enrolments,
-    IReadOnlyDictionary<int, Bundle> Bundled, IReadOnlyList<ClassesSoFar> SoFar, PaymentSettings Settings, DateOnly Today)
-{
-    public decimal Owed => Charges.Sum(c => c.Balance);
-    public decimal Overdue => Charges.Where(c => c.IsOverdue(Today)).Sum(c => c.Balance);
-}
-
-// What a price or discount change did to this month's unpaid fees.
-public record RepriceResult(int Updated, int Removed, int Added, IReadOnlyList<string> WaitingForBundle)
-{
-    // " This month's unpaid fees were brought up to date: 2 changed, 3 removed, 1 added." or nothing.
-    public string Describe()
-    {
-        var parts = new[] { (Updated, "changed"), (Removed, "removed"), (Added, "added") }
-            .Where(p => p.Item1 > 0).Select(p => $"{p.Item1} {p.Item2}").ToList();
-        string waiting = WaitingForBundle.Count == 0 ? "" :
-            $" {string.Join(", ", WaitingForBundle)} already paid part of this month's course fees, so {(WaitingForBundle.Count == 1 ? "their" : "each one's")} bundle price starts next month.";
-        return (parts.Count == 0 ? "" : $" This month's unpaid fees were brought up to date: {string.Join(", ", parts)}.") + waiting;
-    }
-}
-
-public enum BooksFilter { Open, Overdue, Paid, All }
-
-public record BooksStudent(ApplicationUser Student, decimal Owed, decimal Overdue, DateOnly? NextDue, bool HasDiscount);
-
-// The organisation's books for one view: the charges that match, and the totals that always show.
-public record Books(
-    IReadOnlyList<Charge> Charges, IReadOnlyList<BooksStudent> Students, decimal Overdue, decimal DueSoon,
-    decimal CollectedThisMonth, DateOnly Today, int OverdueCount);
-
 public interface IBillingService
 {
     // Makes any charges that are due by now: this month's fees, and last month's classes. Safe to run any time.
@@ -68,82 +28,108 @@ public interface IBillingService
 
 public class BillingService(SecretariArtDbContext db, INotificationService notifications, TimeProvider clock) : IBillingService
 {
-    // When a charge is made after its usual due day (e.g. someone enrolled on the 20th), they get this long to pay.
-    public const int LateChargeDays = 7;
-
     public async Task<int> EnsureChargesAsync(int organizationId, string? studentId = null)
     {
-        PaymentSettings settings = await SettingsAsync(organizationId);
-        OrganizationRules? rules = await db.OrganizationRules.AsNoTracking().FirstOrDefaultAsync(r => r.OrganizationId == organizationId);
         DateOnly today = clock.SchoolToday();
         DateOnly month = today.FirstOfMonth();
-        DateTime now = clock.GetUtcNow().UtcDateTime;
+        OrganizationRules? rules = await db.OrganizationRules.AsNoTracking().FirstOrDefaultAsync(r => r.OrganizationId == organizationId);
 
-        var students = (await db.Memberships.AsNoTracking()
-                .Where(m => m.OrganizationId == organizationId && m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active &&
-                            (studentId == null || m.UserId == studentId))
+        var students = (await db.Memberships.AsNoTracking().Approved(MembershipRole.Student)
+                .Where(m => m.OrganizationId == organizationId && (studentId == null || m.UserId == studentId))
                 .Select(m => m.UserId).ToListAsync()).ToHashSet();
         var enrolments = (await EnrolmentsAsync(organizationId, studentId)).Where(e => students.Contains(e.StudentId)).ToList();
-        var bundled = BundleCoverage(enrolments, await SettledCourseFeesAsync(organizationId, studentId, month), out _);
-        var discounts = await DiscountsAsync(organizationId, studentId);
-        var keys = (await db.Charges.Where(c => c.OrganizationId == organizationId && c.Key != null && (studentId == null || c.StudentId == studentId))
-            .Select(c => c.Key!).ToListAsync()).ToHashSet();
-
-        var added = new List<Charge>();
+        var existingKeys = await db.Charges
+            .Where(c => c.OrganizationId == organizationId && c.Key != null && (studentId == null || c.StudentId == studentId))
+            .Select(c => c.Key!).ToListAsync();
+        var run = new BillingRun(
+            organizationId, await db.PaymentSettings.ForOrganizationAsync(organizationId), today, clock.GetUtcNow().UtcDateTime,
+            await DiscountsAsync(organizationId, studentId), existingKeys.ToHashSet(),
+            BundleCoverage(enrolments, await SettledCourseFeesAsync(organizationId, studentId, month), out _));
 
         // Monthly fees, for this month, if the term runs in it.
-        if (MonthInTerm(rules, month))
+        var added = rules.TermRunsIn(month) ? MonthlyCharges(run, month, enrolments) : [];
+
+        // Classes checked in to in months that are over. By the course on the check-in, so a class taken off the
+        // timetable since is still billed.
+        var perClassCourses = await db.Courses.PerClassAsync(organizationId);
+        var bookings = (await db.Bookings
+                .Where(b => b.OrganizationId == organizationId && b.ChargeId == null && b.Date < month &&
+                            (studentId == null || b.StudentId == studentId))
+                .ToListAsync())
+            .Where(b => perClassCourses.ContainsKey(b.CourseId)).ToList();
+        var perClass = PerClassCharges(run, bookings, perClassCourses);
+        added.AddRange(perClass.Select(p => p.Charge));
+
+        return await SaveNewChargesAsync(added, perClass);
+    }
+
+    // What every charge made in one billing run shares. Keys holds every charge key that exists, and grows as charges
+    // are made, so nothing is billed twice.
+    private sealed record BillingRun(
+        int OrganizationId, PaymentSettings Settings, DateOnly Today, DateTime Now, List<StudentDiscount> Discounts,
+        HashSet<string> Keys, Dictionary<(string StudentId, int CourseId), Bundle> Bundled)
+    {
+        public Charge NewCharge(string studentId, ChargeKind kind, string key, int? courseId, int? bundleId, DateOnly month,
+            string description, int? classes, decimal baseAmount, DateOnly dueMonth) =>
+            BillingService.NewCharge(OrganizationId, studentId, kind, key, courseId, bundleId, month, description, classes,
+                baseAmount, Discounts, Due(dueMonth, Settings, Today), Now);
+    }
+
+    // This month's fees: a priced bundle's price for students who take all of it, each monthly course's price otherwise.
+    private static List<Charge> MonthlyCharges(BillingRun run, DateOnly month, List<Enrolment> enrolments)
+    {
+        var charges = new List<Charge>();
+        foreach (var group in run.Bundled.GroupBy(b => (b.Key.StudentId, BundleId: b.Value.Id)))
         {
-            foreach (var group in bundled.GroupBy(b => (b.Key.StudentId, BundleId: b.Value.Id)))
+            Bundle bundle = group.First().Value;
+            string key = ChargeKeys.Bundle(bundle.Id, group.Key.StudentId, month);
+            if (run.Keys.Add(key))
             {
-                Bundle bundle = group.First().Value;
-                string key = $"B:{bundle.Id}:{group.Key.StudentId}:{month:yyyy-MM}";
-                if (keys.Add(key))
-                {
-                    added.Add(NewCharge(organizationId, group.Key.StudentId, ChargeKind.Bundle, key, null, bundle.Id, month,
-                        $"{bundle.Name} (bundle), {DisplayNames.MonthName(month)}", null, bundle.MonthlyPrice!.Value,
-                        discounts, Due(month, settings, today), now));
-                }
-            }
-            foreach (Enrolment enrolment in enrolments.Where(e => !bundled.ContainsKey((e.StudentId, e.CourseId)) &&
-                                                                  e.Course!.Pricing == CoursePricing.Monthly && e.Course.Price > 0))
-            {
-                string key = $"M:{enrolment.CourseId}:{enrolment.StudentId}:{month:yyyy-MM}";
-                if (keys.Add(key))
-                {
-                    added.Add(NewCharge(organizationId, enrolment.StudentId, ChargeKind.Monthly, key, enrolment.CourseId, null, month,
-                        $"{enrolment.Course!.Name}, {DisplayNames.MonthName(month)}", null, enrolment.Course.Price,
-                        discounts, Due(month, settings, today), now));
-                }
+                charges.Add(run.NewCharge(group.Key.StudentId, ChargeKind.Bundle, key, null, bundle.Id, month,
+                    $"{bundle.Name} (bundle), {DisplayNames.MonthName(month)}", null, bundle.MonthlyPrice!.Value, month));
             }
         }
 
-        // Classes checked in to in months that are over. A course covered by a priced bundle isn't charged per class.
-        // By the course on the check-in, so a class taken off the timetable since is still billed.
-        var perClassCourses = await db.Courses.AsNoTracking()
-            .Where(c => c.OrganizationId == organizationId && c.Pricing == CoursePricing.PerClass).ToDictionaryAsync(c => c.Id);
-        var bookings = (await db.Bookings
-                .Where(b => b.OrganizationId == organizationId && b.ChargeId == null && b.Date < month && (studentId == null || b.StudentId == studentId))
-                .ToListAsync())
-            .Where(b => perClassCourses.ContainsKey(b.CourseId)).ToList();
-        var perClass = new List<(Charge Charge, List<Booking> Bookings)>();
+        var monthly = enrolments.Where(e => !run.Bundled.ContainsKey((e.StudentId, e.CourseId)) &&
+                                            e.Course!.Pricing == CoursePricing.Monthly && e.Course.Price > 0);
+        foreach (Enrolment enrolment in monthly)
+        {
+            string key = ChargeKeys.Monthly(enrolment.CourseId, enrolment.StudentId, month);
+            if (run.Keys.Add(key))
+            {
+                charges.Add(run.NewCharge(enrolment.StudentId, ChargeKind.Monthly, key, enrolment.CourseId, null, month,
+                    $"{enrolment.Course!.Name}, {DisplayNames.MonthName(month)}", null, enrolment.Course.Price, month));
+            }
+        }
+        return charges;
+    }
+
+    // One charge per student, course and month for the billable check-ins (due the next month), with the check-ins it
+    // covers. A course covered by a priced bundle isn't charged per class.
+    private static List<(Charge Charge, List<Booking> Bookings)> PerClassCharges(
+        BillingRun run, List<Booking> bookings, Dictionary<int, Course> courses)
+    {
+        var charges = new List<(Charge, List<Booking>)>();
         foreach (var group in bookings.GroupBy(b => (b.StudentId, b.CourseId, Month: b.Date.FirstOfMonth())))
         {
             var (student, courseId, billedMonth) = group.Key;
-            Course course = perClassCourses[courseId];
-            var billable = group.Where(b => BookingService.Billable(b, settings)).ToList();
-            string key = $"P:{course.Id}:{student}:{billedMonth:yyyy-MM}";
-            if (billable.Count == 0 || course.Price <= 0 || bundled.ContainsKey((student, course.Id)) || !keys.Add(key))
+            Course course = courses[courseId];
+            int billable = group.Count(b => BookingService.Billable(b, run.Settings));
+            string key = ChargeKeys.PerClass(course.Id, student, billedMonth);
+            if (billable == 0 || course.Price <= 0 || run.Bundled.ContainsKey((student, course.Id)) || !run.Keys.Add(key))
             {
                 continue;
             }
-            Charge charge = NewCharge(organizationId, student, ChargeKind.PerClass, key, course.Id, null, billedMonth,
-                $"{course.Name}, {DisplayNames.MonthName(billedMonth)}: {DisplayNames.Plural(billable.Count, "class", "classes")} × {DisplayNames.Money(course.Price)}",
-                billable.Count, course.Price * billable.Count, discounts, Due(billedMonth.AddMonths(1), settings, today), now);
-            added.Add(charge);
-            perClass.Add((charge, group.ToList()));
+            string description = $"{course.Name}, {DisplayNames.MonthName(billedMonth)}: " +
+                                 $"{DisplayNames.Plural(billable, "class", "classes")} × {DisplayNames.Money(course.Price)}";
+            charges.Add((run.NewCharge(student, ChargeKind.PerClass, key, course.Id, null, billedMonth, description,
+                billable, course.Price * billable, billedMonth.AddMonths(1)), group.ToList()));
         }
+        return charges;
+    }
 
+    private async Task<int> SaveNewChargesAsync(List<Charge> added, List<(Charge Charge, List<Booking> Bookings)> perClass)
+    {
         if (added.Count == 0)
         {
             return 0;
@@ -210,13 +196,7 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         int updated = 0, removed = 0;
         foreach (Charge charge in charges)
         {
-            // What this fee should be now: a bundle fee while the student takes the whole priced bundle; a course fee
-            // while the course is priced monthly and not covered by such a bundle (QA, P1: a bundle price set later
-            // replaces the course fees already made, rather than adding to them).
-            decimal price = charge.Kind == ChargeKind.Bundle
-                ? bundled.FirstOrDefault(b => b.Key.StudentId == charge.StudentId && b.Value.Id == charge.BundleId).Value?.MonthlyPrice ?? 0
-                : !bundled.ContainsKey((charge.StudentId, charge.CourseId!.Value)) &&
-                  courses.GetValueOrDefault(charge.CourseId.Value) is { Pricing: CoursePricing.Monthly } course ? course.Price : 0;
+            decimal price = CurrentPrice(charge, bundled, courses);
             if (price <= 0)
             {
                 db.Charges.Remove(charge);
@@ -242,6 +222,23 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         return new RepriceResult(updated, removed, added, waitingNames);
     }
 
+    // What a monthly fee should be now, or 0 if it shouldn't exist any more. A bundle fee while the student takes the
+    // whole priced bundle; a course fee while the course is priced monthly and not covered by such a bundle (a bundle
+    // price set later replaces the course fees already made, rather than adding to them).
+    private static decimal CurrentPrice(
+        Charge charge, Dictionary<(string StudentId, int CourseId), Bundle> bundled, Dictionary<int, Course> courses)
+    {
+        if (charge.Kind == ChargeKind.Bundle)
+        {
+            Bundle? bundle = bundled.FirstOrDefault(b => b.Key.StudentId == charge.StudentId && b.Value.Id == charge.BundleId).Value;
+            return bundle?.MonthlyPrice ?? 0;
+        }
+
+        int courseId = charge.CourseId!.Value;
+        bool coveredByBundle = bundled.ContainsKey((charge.StudentId, courseId));
+        return !coveredByBundle && courses.GetValueOrDefault(courseId) is { Pricing: CoursePricing.Monthly } course ? course.Price : 0;
+    }
+
     public async Task<Books> GetBooksAsync(int organizationId, BooksFilter filter, string? search)
     {
         await EnsureChargesAsync(organizationId);
@@ -252,7 +249,7 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         var charges = await db.Charges.AsNoTracking().Include(c => c.Payments).Include(c => c.Student)
             .Where(c => c.OrganizationId == organizationId).ToListAsync();
         var students = await db.Memberships.AsNoTracking().Include(m => m.User)
-            .Where(m => m.OrganizationId == organizationId && m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active)
+            .Approved(MembershipRole.Student).Where(m => m.OrganizationId == organizationId)
             .Select(m => m.User!).ToListAsync();
         var discounted = (await db.StudentDiscounts.Where(d => d.OrganizationId == organizationId).Select(d => d.StudentId).ToListAsync()).ToHashSet();
 
@@ -264,31 +261,49 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
                 _ => true,
             })
             .Where(c => string.IsNullOrWhiteSpace(search) || TextMatch.Contains(c.Student!.FullName, search) || TextMatch.Contains(c.Description, search))
-            .OrderBy(c => filter == BooksFilter.Paid || filter == BooksFilter.All ? 0 : c.IsOverdue(today) ? 0 : 1)
-            .ThenBy(c => filter == BooksFilter.Paid || filter == BooksFilter.All ? DateOnly.MaxValue.DayNumber - c.DueOn.DayNumber : c.DueOn.DayNumber)
+            .ToList();
+        // Open and overdue lists: overdue first, then the soonest due. Paid and all: the latest first.
+        bool latestFirst = filter is BooksFilter.Paid or BooksFilter.All;
+        matching = matching
+            .OrderBy(c => latestFirst || c.IsOverdue(today) ? 0 : 1)
+            .ThenBy(c => latestFirst ? -c.DueOn.DayNumber : c.DueOn.DayNumber)
             .ThenBy(c => c.Student!.LastName).ThenBy(c => c.Student!.FirstName)
             .ToList();
 
-        var byStudent = charges.ToLookup(c => c.StudentId);
-        var people = students.Concat(charges.Select(c => c.Student!)).DistinctBy(s => s.Id)
-            .Where(s => string.IsNullOrWhiteSpace(search) || TextMatch.Contains(s.FullName, search))
-            .Select(s => new BooksStudent(s, byStudent[s.Id].Sum(c => c.Balance), byStudent[s.Id].Where(c => c.IsOverdue(today)).Sum(c => c.Balance),
-                byStudent[s.Id].Where(c => c.Balance > 0).Select(c => (DateOnly?)c.DueOn).Min(), discounted.Contains(s.Id)))
-            .OrderByDescending(s => s.Overdue).ThenByDescending(s => s.Owed).ThenBy(s => s.Student.LastName).ThenBy(s => s.Student.FirstName)
-            .ToList();
+        var people = SummariseStudents(students.Concat(charges.Select(c => c.Student!)).DistinctBy(s => s.Id)
+            .Where(s => string.IsNullOrWhiteSpace(search) || TextMatch.Contains(s.FullName, search)), charges, discounted, today);
 
         return new Books(matching, people,
             charges.Where(c => c.IsOverdue(today)).Sum(c => c.Balance),
-            charges.Where(c => c.Balance > 0 && !c.IsOverdue(today) && c.DueOn <= today.AddDays(14)).Sum(c => c.Balance),
+            charges.Where(c => c.Balance > 0 && !c.IsOverdue(today) && c.DueOn <= today.AddDays(PaymentDefaults.DueSoonDays)).Sum(c => c.Balance),
             charges.SelectMany(c => c.Payments).Where(p => p.PaidOn >= month).Sum(p => p.Amount),
             today, charges.Count(c => c.IsOverdue(today)));
+    }
+
+    // Each student's totals for the books, the most overdue first.
+    private static List<BooksStudent> SummariseStudents(
+        IEnumerable<ApplicationUser> students, List<Charge> charges, HashSet<string> discounted, DateOnly today)
+    {
+        var byStudent = charges.ToLookup(c => c.StudentId);
+        return students
+            .Select(s =>
+            {
+                var theirs = byStudent[s.Id].ToList();
+                return new BooksStudent(s,
+                    Owed: theirs.Sum(c => c.Balance),
+                    Overdue: theirs.Where(c => c.IsOverdue(today)).Sum(c => c.Balance),
+                    NextDue: theirs.Where(c => c.Balance > 0).Select(c => (DateOnly?)c.DueOn).Min(),
+                    HasDiscount: discounted.Contains(s.Id));
+            })
+            .OrderByDescending(s => s.Overdue).ThenByDescending(s => s.Owed)
+            .ThenBy(s => s.Student.LastName).ThenBy(s => s.Student.FirstName)
+            .ToList();
     }
 
     public async Task<Statement?> GetStatementAsync(int organizationId, string studentId)
     {
         ApplicationUser? student = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId);
-        bool known = await db.Memberships.AnyAsync(m => m.UserId == studentId && m.OrganizationId == organizationId &&
-                                                        m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active)
+        bool known = await db.Memberships.HasApprovedAsync(studentId, organizationId, MembershipRole.Student)
                      || await db.Charges.AnyAsync(c => c.StudentId == studentId && c.OrganizationId == organizationId);
         if (student == null || !known)
         {
@@ -302,9 +317,8 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
     public async Task<List<Statement>> GetMineAsync(string studentId)
     {
         ApplicationUser student = await db.Users.AsNoTracking().FirstAsync(u => u.Id == studentId);
-        var organizationIds = await db.Memberships
-            .Where(m => m.UserId == studentId && m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active &&
-                        m.Organization!.Status == OrganizationStatus.Active)
+        var organizationIds = await db.Memberships.Live()
+            .Where(m => m.UserId == studentId && m.Role == MembershipRole.Student)
             .Select(m => m.OrganizationId)
             .Union(db.Charges.Where(c => c.StudentId == studentId).Select(c => c.OrganizationId))
             .ToListAsync();
@@ -387,14 +401,13 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
     public async Task<ServiceResult> AddChargeAsync(int organizationId, string studentId, ChargeInput input)
     {
         ApplicationUser? student = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId);
-        if (student == null || !await db.Memberships.AnyAsync(m => m.UserId == studentId && m.OrganizationId == organizationId &&
-                                                                   m.Role == MembershipRole.Student && m.Status == MembershipStatus.Active))
+        if (student == null || !await db.Memberships.HasApprovedAsync(studentId, organizationId, MembershipRole.Student))
         {
             return ServiceResult.Fail("That person isn't an approved student of this organisation.");
         }
-        if (input.Amount is <= 0 or > PaymentSetupService.MaxPrice)
+        if (input.Amount is <= 0 or > PaymentDefaults.MaxPrice)
         {
-            return ServiceResult.Fail($"Enter an amount between €0.01 and {DisplayNames.Money(PaymentSetupService.MaxPrice)}.");
+            return ServiceResult.Fail($"Enter an amount between €0.01 and {DisplayNames.Money(PaymentDefaults.MaxPrice)}.");
         }
 
         var charge = new Charge
@@ -422,7 +435,7 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         {
             return ServiceResult.Fail("That charge was waived; it can't be changed.");
         }
-        if (amount < charge.Paid || amount <= 0 || amount > PaymentSetupService.MaxPrice)
+        if (amount < charge.Paid || amount <= 0 || amount > PaymentDefaults.MaxPrice)
         {
             return ServiceResult.Fail(charge.Paid > 0
                 ? $"The amount can't be less than the {DisplayNames.Money(charge.Paid)} already paid."
@@ -510,7 +523,7 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
     private static DateOnly Due(DateOnly month, PaymentSettings settings, DateOnly today)
     {
         DateOnly due = month.Day(settings.DueDay);
-        return due >= today ? due : today.AddDays(LateChargeDays);
+        return due >= today ? due : today.AddDays(PaymentDefaults.LateChargeDays);
     }
 
     // The courses each student takes through a priced bundle, with that bundle. The bundle price applies only to a
@@ -558,14 +571,11 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
     private async Task<string> OrganizationNameAsync(int organizationId) =>
         await db.Organizations.Where(o => o.Id == organizationId).Select(o => o.Name).FirstAsync();
 
-    private static bool MonthInTerm(OrganizationRules? rules, DateOnly month) =>
-        (rules?.TermStarts == null || rules.TermStarts <= month.AddMonths(1).AddDays(-1)) && (rules?.TermEnds == null || rules.TermEnds >= month);
-
     private async Task<Statement> StatementAsync(int organizationId, ApplicationUser student)
     {
         DateOnly today = clock.SchoolToday();
         DateOnly month = today.FirstOfMonth();
-        PaymentSettings settings = await SettingsAsync(organizationId);
+        PaymentSettings settings = await db.PaymentSettings.ForOrganizationAsync(organizationId);
         Organization organization = await db.Organizations.AsNoTracking().FirstAsync(o => o.Id == organizationId);
         var charges = await db.Charges.AsNoTracking().Include(c => c.Payments).ThenInclude(p => p.RecordedBy)
             .Where(c => c.OrganizationId == organizationId && c.StudentId == student.Id).ToListAsync();
@@ -573,39 +583,44 @@ public class BillingService(SecretariArtDbContext db, INotificationService notif
         var discounts = await db.StudentDiscounts.AsNoTracking().Include(d => d.Discount).Include(d => d.Course).Include(d => d.Bundle)
             .Where(d => d.OrganizationId == organizationId && d.StudentId == student.Id).OrderBy(d => d.Id).ToListAsync();
 
-        // This month's check-ins up to today, priced as they would be billed (QA, P9: not next month's).
-        var bundled = BundleCoverage(enrolments, await SettledCourseFeesAsync(organizationId, student.Id, month), out _).ToDictionary(b => b.Key.CourseId, b => b.Value);
-        var perClassCourses = await db.Courses.AsNoTracking()
-            .Where(c => c.OrganizationId == organizationId && c.Pricing == CoursePricing.PerClass).ToDictionaryAsync(c => c.Id);
-        var bookings = await db.Bookings.AsNoTracking()
-            .Where(b => b.OrganizationId == organizationId && b.StudentId == student.Id && b.Date >= month && b.Date <= today && b.ChargeId == null)
-            .ToListAsync();
-        var soFar = bookings.Where(b => perClassCourses.ContainsKey(b.CourseId) && BookingService.Billable(b, settings) && !bundled.ContainsKey(b.CourseId))
-            .GroupBy(b => b.CourseId)
-            .Select(g =>
-            {
-                Course course = perClassCourses[g.Key];
-                decimal amount = course.Price * g.Count();
-                var (discount, _) = ApplyDiscounts(amount, Applicable(discounts, student.Id, course.Id, null));
-                return new ClassesSoFar(course, g.Count(), amount - discount);
-            })
-            .Where(c => c.Amount > 0)
-            .OrderBy(c => c.Course.Name).ToList();
+        var bundled = BundleCoverage(enrolments, await SettledCourseFeesAsync(organizationId, student.Id, month), out _)
+            .ToDictionary(b => b.Key.CourseId, b => b.Value);
+        var soFar = await ClassesSoFarAsync(organizationId, student.Id, settings, discounts, bundled, month, today);
 
         var ordered = charges
             .OrderBy(c => c.Balance > 0 ? 0 : 1)
             .ThenBy(c => c.Balance > 0 ? c.DueOn.DayNumber : -c.DueOn.DayNumber)
             .ThenBy(c => c.Description).ToList();
-        return new Statement(organization, student, ordered, discounts, enrolments.OrderBy(e => e.Course!.Name).ToList(), bundled, soFar, settings, today);
+        return new Statement(organization, student, ordered, discounts, enrolments.OrderBy(e => e.Course!.Name).ToList(), bundled, soFar, today);
+    }
+
+    // This month's check-ins up to today, priced as they will be billed next month, per course. Courses covered by a
+    // priced bundle are paid through the bundle.
+    private async Task<List<ClassesSoFar>> ClassesSoFarAsync(int organizationId, string studentId, PaymentSettings settings,
+        List<StudentDiscount> discounts, Dictionary<int, Bundle> bundled, DateOnly month, DateOnly today)
+    {
+        var perClassCourses = await db.Courses.PerClassAsync(organizationId);
+        var bookings = await db.Bookings.AsNoTracking()
+            .Where(b => b.OrganizationId == organizationId && b.StudentId == studentId && b.Date >= month && b.Date <= today &&
+                        b.ChargeId == null)
+            .ToListAsync();
+        return bookings
+            .Where(b => perClassCourses.ContainsKey(b.CourseId) && BookingService.Billable(b, settings) && !bundled.ContainsKey(b.CourseId))
+            .GroupBy(b => b.CourseId)
+            .Select(g =>
+            {
+                Course course = perClassCourses[g.Key];
+                decimal amount = course.Price * g.Count();
+                var (discount, _) = ApplyDiscounts(amount, Applicable(discounts, studentId, course.Id, null));
+                return new ClassesSoFar(course, g.Count(), amount - discount);
+            })
+            .Where(c => c.Amount > 0)
+            .OrderBy(c => c.Course.Name).ToList();
     }
 
     private Task<List<StudentDiscount>> DiscountsAsync(int organizationId, string? studentId) =>
         db.StudentDiscounts.AsNoTracking().Include(d => d.Discount)
             .Where(d => d.OrganizationId == organizationId && (studentId == null || d.StudentId == studentId)).ToListAsync();
-
-    private async Task<PaymentSettings> SettingsAsync(int organizationId) =>
-        await db.PaymentSettings.AsNoTracking().FirstOrDefaultAsync(s => s.OrganizationId == organizationId)
-        ?? new PaymentSettings { OrganizationId = organizationId };
 
     private static readonly ServiceResult ChargeNotFound = ServiceResult.Fail("That charge doesn't exist any more.");
 }

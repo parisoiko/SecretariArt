@@ -37,11 +37,7 @@ public interface IPaymentSetupService
 public class PaymentSetupService(SecretariArtDbContext db, IMembershipService memberships, IBillingService billing, TimeProvider clock)
     : IPaymentSetupService
 {
-    public const decimal MaxPrice = 100_000m;
-
-    public async Task<PaymentSettings> GetSettingsAsync(int organizationId) =>
-        await db.PaymentSettings.AsNoTracking().FirstOrDefaultAsync(s => s.OrganizationId == organizationId)
-        ?? new PaymentSettings { OrganizationId = organizationId };
+    public Task<PaymentSettings> GetSettingsAsync(int organizationId) => db.PaymentSettings.ForOrganizationAsync(organizationId);
 
     public async Task<ServiceResult> SaveSettingsAsync(int organizationId, PaymentSettingsInput input)
     {
@@ -106,7 +102,7 @@ public class PaymentSetupService(SecretariArtDbContext db, IMembershipService me
     {
         < 0 => $"{name}: a price can't be negative.",
         0 => emptyAllowed ? $"{name}: enter a price above €0, or leave it empty to use its courses' prices." : $"{name}: enter the price, or choose “No price yet”.",
-        > MaxPrice => $"{name}: the most a price can be is {DisplayNames.Money(MaxPrice)}.",
+        > PaymentDefaults.MaxPrice => $"{name}: the most a price can be is {DisplayNames.Money(PaymentDefaults.MaxPrice)}.",
         _ when price != Math.Round(price, 2) => $"{name}: use whole cents, e.g. 12.50.",
         _ => null,
     };

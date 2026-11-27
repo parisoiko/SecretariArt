@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SecretariArt.Extensions;
 using SecretariArt.Authorization;
 using SecretariArt.Data;
 using SecretariArt.Models;
@@ -14,7 +15,7 @@ public class HomeController(
 {
     public async Task<IActionResult> Index()
     {
-        string userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        string userId = User.UserId();
         IReadOnlyList<Membership> memberships = await currentMemberships.GetAsync();
 
         var adminOf = memberships
@@ -59,7 +60,7 @@ public class HomeController(
             ? (await schedule.GetPersonalAsync(userId)).Where(p => p.Session.Day == today.DayOfWeek).OrderBy(p => p.Session.Starts).ToList()
             : [];
         var paymentsDue = (await db.Charges.AsNoTracking().Include(c => c.Payments).Include(c => c.Organization)
-                .Where(c => c.StudentId == userId && c.CancelledAt == null && c.DueOn <= today.AddDays(14)).ToListAsync())
+                .Where(c => c.StudentId == userId && c.CancelledAt == null && c.DueOn <= today.AddDays(PaymentDefaults.DueSoonDays)).ToListAsync())
             .Where(c => c.Balance > 0).OrderBy(c => c.DueOn).ToList();
 
         return View(new HomeViewModel

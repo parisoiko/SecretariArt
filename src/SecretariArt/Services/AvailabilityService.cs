@@ -21,8 +21,7 @@ public class AvailabilityService(SecretariArtDbContext db, IMembershipService me
     public async Task<List<TeachingPlace>> GetForTeacherAsync(string teacherId)
     {
         var organizations = await db.Memberships.AsNoTracking()
-            .Where(m => m.UserId == teacherId && m.Role == MembershipRole.Teacher && m.Status == MembershipStatus.Active &&
-                        m.Organization!.Status == OrganizationStatus.Active)
+            .Live().Where(m => m.UserId == teacherId && m.Role == MembershipRole.Teacher)
             .Select(m => m.Organization!).OrderBy(o => o.Name).ToListAsync();
         var slots = await db.TeacherAvailability.AsNoTracking().Where(a => a.TeacherId == teacherId).ToListAsync();
 
@@ -31,7 +30,7 @@ public class AvailabilityService(SecretariArtDbContext db, IMembershipService me
         {
             places.Add(new TeachingPlace(organization, await rules.GetAsync(organization.Id),
                 slots.Where(s => s.OrganizationId == organization.Id)
-                    .OrderBy(s => Array.IndexOf(DisplayNames.Week, s.Day)).ThenBy(s => s.From).ToList()));
+                    .OrderBy(s => s.Day.WeekIndex()).ThenBy(s => s.From).ToList()));
         }
         return places;
     }
@@ -64,8 +63,8 @@ public class AvailabilityService(SecretariArtDbContext db, IMembershipService me
         await db.SaveChangesAsync();
 
         string message = touching.Count > 0
-            ? $"Saved: {input.Day} {from:HH:mm}–{to:HH:mm} (joined with what you'd already posted)."
-            : $"Saved: {input.Day} {from:HH:mm}–{to:HH:mm}.";
+            ? $"Saved: {DisplayNames.TimeRange(input.Day, from, to)} (joined with what you'd already posted)."
+            : $"Saved: {DisplayNames.TimeRange(input.Day, from, to)}.";
         bool outside = !organizationRules.TeachingDays.HasFlag(input.Day.ToTeachingDay()) ||
                        from < organizationRules.DayStarts || to > organizationRules.DayEnds;
         return ServiceResult.Ok(outside
@@ -83,6 +82,6 @@ public class AvailabilityService(SecretariArtDbContext db, IMembershipService me
 
         db.TeacherAvailability.Remove(slot);
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"Removed {slot.Day} {slot.From:HH:mm}–{slot.To:HH:mm}. Classes already there stay; the admin sees them flagged.");
+        return ServiceResult.Ok($"Removed {DisplayNames.TimeRange(slot.Day, slot.From, slot.To)}. Classes already there stay; the admin sees them flagged.");
     }
 }

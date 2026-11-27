@@ -5,10 +5,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSecretariArtData(builder.Configuration);
 builder.Services.AddSecretariArtIdentity();
-builder.Services.AddSecretariArtServices();
+builder.Services.AddSecretariArtServices(builder.Configuration);
 builder.Services.AddSecretariArtRateLimiting(builder.Configuration);
+builder.Services.AddSecretariArtHosting(builder.Configuration);
 
 var app = builder.Build();
+
+// First, so everything after sees the visitor's address and scheme, not the proxy's.
+app.UseSecretariArtForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -16,6 +20,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
     app.UseHttpsRedirection();
 }
+
+app.UseSecurityHeaders(app.Environment);
 
 // Friendly pages for 403/404 instead of an empty response.
 app.UseStatusCodePagesWithReExecute("/error/{0}");
@@ -29,6 +35,7 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
+app.MapSecretariArtHealthChecks();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

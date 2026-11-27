@@ -5,16 +5,10 @@
 *@
 @{
     var current = (Organization)ViewData["Organization"]!;
-    string tab = ViewData["AdminTab"] as string ?? "members";
-    (string Controller, string Action) target = tab switch
-    {
-        "enrolments" => ("Enrolments", "Index"), "rules" => ("Rules", "Edit"), "classrooms" => ("Classrooms", "Index"),
-        "courses" => ("Courses", "Index"), "bundles" => ("Bundles", "Index"), "schedule" => ("Schedule", "Index"),
-        "payments" => ("Payments", "Index"), _ => ("Administration", "Members"),
-    };
+    // The same section in the other organisation.
+    var target = SecretariArt.ViewComponents.AdminSections.Find(ViewData["AdminTab"] as string);
     var others = (await CurrentMemberships.GetAsync())
-        .Where(m => m.Role == MembershipRole.Admin && m.Status == MembershipStatus.Active &&
-                    m.Organization!.Status == OrganizationStatus.Active && m.OrganizationId != current.Id)
+        .Where(m => m.IsLive && m.Role == MembershipRole.Admin && m.OrganizationId != current.Id)
         .Select(m => m.Organization!).DistinctBy(o => o.Id).OrderBy(o => o.Name).ToList();
 }
 <div class="dropdown org-switcher">

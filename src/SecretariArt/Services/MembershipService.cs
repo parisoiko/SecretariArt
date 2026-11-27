@@ -44,7 +44,7 @@ public class MembershipService(SecretariArtDbContext db, TimeProvider clock) : I
         Membership? existing = await db.Memberships.FirstOrDefaultAsync(m =>
             m.UserId == userId && m.OrganizationId == organization.Id && m.Role == role);
 
-        string roleName = role.ToString().ToLowerInvariant();
+        string roleName = role.LowerName();
         switch (existing?.Status)
         {
             case MembershipStatus.Active:
@@ -118,7 +118,7 @@ public class MembershipService(SecretariArtDbContext db, TimeProvider clock) : I
         membership.Status = MembershipStatus.Active;
         membership.DecidedAt = Now;
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"{membership.User!.FullName} is now a {RoleName(membership)} here.");
+        return ServiceResult.Ok($"{membership.User!.FullName} is now a {membership.Role.LowerName()} here.");
     }
 
     public async Task<ServiceResult> RejectAsync(int organizationId, int membershipId, string reason)
@@ -145,37 +145,29 @@ public class MembershipService(SecretariArtDbContext db, TimeProvider clock) : I
         membership.RejectionReason = reason.Trim();
         await db.SaveChangesAsync();
         return ServiceResult.Ok(
-            $"{membership.User!.FullName}'s request to join as a {RoleName(membership)} was rejected. " +
+            $"{membership.User!.FullName}'s request to join as a {membership.Role.LowerName()} was rejected. " +
             "You'll find it under Not approved if you change your mind.");
     }
 
     public Task<bool> IsActiveAdminAsync(string userId, int organizationId) =>
-        db.Memberships.AnyAsync(m =>
-            m.UserId == userId &&
-            m.OrganizationId == organizationId &&
-            m.Role == MembershipRole.Admin &&
-            m.Status == MembershipStatus.Active &&
-            m.Organization!.Status == OrganizationStatus.Active);
+        db.Memberships.Live().AnyAsync(m => m.UserId == userId && m.OrganizationId == organizationId && m.Role == MembershipRole.Admin);
 
     // The approved teachers (or students) of an organisation, for choosing who teaches or who is enrolled.
     public Task<List<ApplicationUser>> GetActivePeopleAsync(int organizationId, MembershipRole role) =>
         db.Memberships.AsNoTracking()
-            .Where(m => m.OrganizationId == organizationId && m.Role == role && m.Status == MembershipStatus.Active)
+            .Approved(role).Where(m => m.OrganizationId == organizationId)
             .Select(m => m.User!)
             .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
             .ToListAsync();
 
     public Task<bool> HasActiveRoleAsync(string userId, int organizationId, MembershipRole role) =>
-        db.Memberships.AnyAsync(m => m.UserId == userId && m.OrganizationId == organizationId &&
-                                     m.Role == role && m.Status == MembershipStatus.Active);
+        db.Memberships.HasApprovedAsync(userId, organizationId, role);
 
     // Filtering by organisation too means an admin can never decide on another organisation's requests.
     private Task<Membership?> FindForDecisionAsync(int organizationId, int membershipId) =>
         db.Memberships
             .Include(m => m.User)
             .FirstOrDefaultAsync(m => m.Id == membershipId && m.OrganizationId == organizationId);
-
-    private static string RoleName(Membership membership) => membership.Role.ToString().ToLowerInvariant();
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 }

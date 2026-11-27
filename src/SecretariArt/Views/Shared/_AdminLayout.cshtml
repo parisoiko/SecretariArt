@@ -7,16 +7,16 @@
     Layout = "_Layout";
     var organization = (Organization)ViewData["Organization"]!;
     string active = ViewData["AdminTab"] as string ?? "";
-    string heading = ViewData["Heading"] as string ?? active switch
-    {
-        "members" => "Members", "enrolments" => "Enrolments", "rules" => "Rules", "classrooms" => "Classrooms",
-        "courses" => "Courses", "bundles" => "Bundles", "schedule" => "Schedule", "payments" => "Payments", _ => "Administration",
-    };
+    string heading = ViewData["Heading"] as string
+        ?? SecretariArt.ViewComponents.AdminSections.Groups.SelectMany(g => g.Links).FirstOrDefault(l => l.Key == active)?.Label
+        ?? "Administration";
+    // "Skip to content" skips the sidebar too (QA, A6): _Layout points it here.
+    ViewData["SkipTo"] = "admin-content";
 }
 
 <div class="admin-shell">
     @await Component.InvokeAsync("AdminSidebar", new { organization, active })
-    <div class="admin-main">
+    <div class="admin-main" id="admin-content" tabindex="-1">
         <div class="admin-heading">
             <div>
                 <h1>@heading</h1>

@@ -32,8 +32,8 @@ public sealed class AdministrationServiceTests : IDisposable
         var memberships = new MembershipService(_db, _clock);
         _rules = new RulesService(_db, _clock);
         _classrooms = new ClassroomService(_db);
-        _courses = new CourseService(_db, _rules, memberships, new NotificationService(_db, _clock));
-        _enrolments = new EnrolmentService(_db, memberships, _clock);
+        _courses = new CourseService(_db, _rules, memberships, new NotificationService(_db, _clock), _clock);
+        _enrolments = new EnrolmentService(_db, memberships, _clock, new NotificationService(_db, _clock));
 
         ApplicationUser owner = AddUser("owner");
         _org = AddOrganization("Athens", owner).Id;

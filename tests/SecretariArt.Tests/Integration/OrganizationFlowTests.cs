@@ -155,7 +155,9 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
 
         string members = await admin.GetStringAsync($"/admin/{athens}/members");
         // One row (the email also sits in the row's search key, so count it where it's shown).
-        Assert.Single(Regex.Matches(members, ">" + Regex.Escape(email)));
+        // Shown with line-break hints (Html.Email): before the "@" and each ".".
+        string shown = email.Replace("@", "<wbr>@").Replace(".", "<wbr>.");
+        Assert.Single(Regex.Matches(members, ">" + Regex.Escape(shown)));
     }
 
     [Fact]
@@ -298,5 +300,21 @@ public class OrganizationFlowTests(SecretariArtFactory factory)
         Assert.Contains("Availability", schedule);
         // She teaches in Athens and studies in Patras: the demo timetable makes two of her classes clash.
         Assert.Contains("Clashes with Ballet for beginners at Patras Dance Studio", schedule);
+    }
+
+    // The policy checks the organisation in the route; a posted organizationId must not be able to swap it for another.
+    [Fact]
+    public async Task An_admin_cannot_reach_another_organisation_through_a_form_field()
+    {
+        int athens = OrganizationId("Athens Drama School");
+        int patras = OrganizationId("Patras Dance Studio");
+        string? patrasCode = factory.Query(db => db.Organizations.Single(o => o.Id == patras).InviteCode);
+
+        HttpClient admin = factory.CreateBrowser();
+        await admin.SignInAsync("eleni@demo.secretariart.app");
+        await admin.SubmitFormAsync($"/admin/{athens}/members", $"/admin/{athens}/invite-code",
+            new() { ["organizationId"] = patras.ToString() });
+
+        Assert.Equal(patrasCode, factory.Query(db => db.Organizations.Single(o => o.Id == patras).InviteCode));
     }
 }

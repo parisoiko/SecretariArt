@@ -486,3 +486,6 @@ CLAUDE.local.md
 
 # QA tester output (qa/README.md)
 qa/reports/
+
+# Emails the development mail sender saves instead of sending (Services/EmailSender.cs)
+App_Data/

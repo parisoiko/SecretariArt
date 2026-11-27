@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using SecretariArt.Extensions;
 using SecretariArt.Services;
 using SecretariArt.ViewModels;
 
@@ -20,7 +20,7 @@ public class MyPaymentsController(ICurrentUserMemberships currentMemberships, IB
         }
         return View(new MyPaymentsViewModel
         {
-            Statements = await billing.GetMineAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!), Today = clock.SchoolToday(),
+            Statements = await billing.GetMineAsync(User.UserId()), Today = clock.SchoolToday(),
         });
     }
 }

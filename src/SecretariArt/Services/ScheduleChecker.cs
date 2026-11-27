@@ -115,7 +115,7 @@ public static class ScheduleChecker
             if (context.TaughtElsewhere.FirstOrDefault(s => s.Group!.TeacherId == teacher.Id && s.Overlaps(day, starts, ends) &&
                                                             context.SameWeeks(s.OrganizationId)) is ClassSession elsewhere)
             {
-                problems.Add($"{teacher.FullName} teaches at another organisation on {elsewhere.Day} {elsewhere.Starts:HH:mm}–{elsewhere.Ends:HH:mm}.");
+                problems.Add($"{teacher.FullName} teaches at another organisation on {elsewhere.When()}.");
             }
 
             bool studiesThen =
@@ -196,7 +196,7 @@ public static class ScheduleChecker
     public static string Describe(ScheduleContext context, ClassSession session)
     {
         CourseGroup? group = context.Group(session.GroupId);
-        return $"{group?.Course?.Name} (group {group?.Name}) on {session.Day} {session.Starts:HH:mm}–{session.Ends:HH:mm}";
+        return $"{group?.Title()} on {session.When()}";
     }
 
     // "Anna", "Anna and Nikos", "Anna, Nikos and 3 others".

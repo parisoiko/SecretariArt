@@ -27,6 +27,9 @@ public class RateLimitSettings
 
     // Generating a timetable takes seconds of CPU: enough tries for real work, not for keeping the server busy.
     public RateLimit Generation { get; set; } = new(10, 600);
+
+    // "Forgot password" and reset forms: flooding someone's inbox, or guessing reset links.
+    public RateLimit AccountRecovery { get; set; } = new(10, 600);
 }
 
 // A plain class (not a positional record), so configuration can override one value and keep the other.
@@ -47,6 +50,7 @@ public static class RateLimitPolicies
     public const string InviteCodes = "invite-codes";
     public const string OrganizationRequests = "organization-requests";
     public const string Generation = "generation";
+    public const string AccountRecovery = "account-recovery";
 
     // Where the "too many requests" page reads how long to wait.
     public const string RetryAfterItem = "RetryAfterSeconds";
@@ -71,6 +75,7 @@ public static class RateLimitPolicies
             options.AddPolicy(InviteCodes, context => Window(context, s => s.InviteCodes, InviteCodes));
             options.AddPolicy(OrganizationRequests, context => Window(context, s => s.OrganizationRequests, OrganizationRequests));
             options.AddPolicy(Generation, context => Window(context, s => s.Generation, Generation));
+            options.AddPolicy(AccountRecovery, context => Window(context, s => s.AccountRecovery, AccountRecovery, byAddress: true));
 
             options.OnRejected = (context, _) =>
             {

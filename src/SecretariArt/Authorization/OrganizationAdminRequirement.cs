@@ -27,10 +27,28 @@ public class OrganizationAdminHandler(IMembershipService memberships) : Authoriz
             return;
         }
 
+        // MVC reads a posted field before the route, so an action that took "organizationId" as a parameter would
+        // act on the form's organisation while this check approved the route's. Refuse any request that names two.
+        if (await NamesAnotherOrganizationAsync(http.Request, organizationId))
+        {
+            return;
+        }
+
         string? userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId != null && await memberships.IsActiveAdminAsync(userId, organizationId))
         {
             context.Succeed(requirement);
         }
+    }
+
+    private static async Task<bool> NamesAnotherOrganizationAsync(HttpRequest request, int organizationId)
+    {
+        const string field = "organizationId";
+        IEnumerable<string?> claimed = request.Query[field];
+        if (request.HasFormContentType)
+        {
+            claimed = claimed.Concat((await request.ReadFormAsync())[field]);
+        }
+        return claimed.Any(value => value != organizationId.ToString());
     }
 }

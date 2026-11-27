@@ -41,8 +41,8 @@ public sealed class ScheduleServiceTests : IDisposable
         var notifications = new NotificationService(_db, _clock);
         _rules = new RulesService(_db, _clock);
         _classrooms = new ClassroomService(_db);
-        _courses = new CourseService(_db, _rules, memberships, notifications);
-        _enrolments = new EnrolmentService(_db, memberships, _clock);
+        _courses = new CourseService(_db, _rules, memberships, notifications, _clock);
+        _enrolments = new EnrolmentService(_db, memberships, _clock, notifications);
         _schedule = new ScheduleService(_db, _rules, notifications, _clock);
         _availability = new AvailabilityService(_db, memberships, _rules);
 

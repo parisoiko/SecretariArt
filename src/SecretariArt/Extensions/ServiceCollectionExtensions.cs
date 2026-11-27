@@ -32,6 +32,10 @@ public static class ServiceCollectionExtensions
             .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>()
             .AddDefaultTokenProviders();
 
+        // A password-reset link works for two hours (the default is a day): long enough to find the email, short
+        // enough that an old message in someone's inbox is no use to whoever reads it later.
+        services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = TimeSpan.FromHours(2));
+
         services.ConfigureApplicationCookie(options =>
         {
             options.LoginPath = "/account/login";
@@ -51,7 +55,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddSecretariArtServices(this IServiceCollection services)
+    public static IServiceCollection AddSecretariArtServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IInviteCodeGenerator, InviteCodeGenerator>();
@@ -65,12 +69,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScheduleService, ScheduleService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
         services.AddScoped<ITimetableDraftService, TimetableDraftService>();
+        services.AddSingleton<GenerationSlots>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IPaymentSetupService, PaymentSetupService>();
         services.AddHostedService<BillingWorker>();
 
+        services.Configure<EmailSettings>(configuration.GetSection("Email"));
+        services.AddSingleton<IEmailSender, PickupDirectoryEmailSender>();
+
         services.AddHttpContextAccessor();
+        // X-Frame-Options comes from SecurityHeaders (DENY), not from anti-forgery (SAMEORIGIN, only on pages with forms).
+        services.AddAntiforgery(options => options.SuppressXFrameOptionsHeader = true);
         services.AddScoped<ICurrentUserMemberships, CurrentUserMemberships>();
 
         services.AddControllersWithViews(options =>

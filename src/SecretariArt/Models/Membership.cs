@@ -22,6 +22,10 @@ public class Membership
     // and why, and so the waiting time before asking again can be enforced.
     public DateTime? LastRejectedAt { get; set; }
     public string? RejectionReason { get; set; }
+
+    // What grants anything: approved, in an organisation that is itself active (not waiting or suspended). For lists
+    // already loaded with their Organization; queries use MembershipQueries.Live(). Not stored (no setter).
+    public bool IsLive => Status == MembershipStatus.Active && Organization?.Status == OrganizationStatus.Active;
 }
 
 public enum MembershipRole

@@ -1,0 +1,97 @@
+@model ChargeCardModel
+@* One charge on the student's page: amounts, payments, and recording a payment, changing or waiving it. *@
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    Charge charge = Model.Charge;
+    DateOnly today = Model.Page.Statement.Today;
+    string studentId = Model.Page.Statement.Student.Id;
+    var state = PaymentDisplay.State(charge, today);
+}
+<article class="charge-card @(charge.CancelledAt != null ? "waived" : "") @(charge.IsOverdue(today) ? "overdue" : "")" id="charge-@charge.Id">
+    <div class="charge-head">
+        <div>
+            <h3>@charge.Description</h3>
+            <div class="text-muted small">
+                @if (charge.DiscountAmount > 0)
+                {
+                    <text>@DisplayNames.Money(charge.BaseAmount) − @DisplayNames.Money(charge.DiscountAmount) (@charge.DiscountNote) = </text>
+                }
+                <strong>@DisplayNames.Money(charge.Amount)</strong>
+                @if (charge.Amount != charge.BaseAmount - charge.DiscountAmount) { <text> (adjusted)</text> }
+                · due @DisplayNames.LongDate(charge.DueOn)
+            </div>
+            @if (charge.CancelledAt != null)
+            {
+                <div class="small">Waived: @charge.CancelReason</div>
+            }
+        </div>
+        <div class="text-end">
+            <span class="status-pill @state.Css">@state.Text</span>
+            @if (charge.Balance > 0 && charge.Paid > 0)
+            {
+                <div class="small mt-1">@DisplayNames.Money(charge.Balance) to pay</div>
+            }
+        </div>
+    </div>
+
+    @if (charge.Payments.Count > 0)
+    {
+        <ul class="payment-list">
+            @foreach (var payment in charge.Payments.OrderBy(p => p.PaidOn).ThenBy(p => p.Id))
+            {
+                <li>
+                    <i class="bi bi-check2-circle text-success" aria-hidden="true"></i>
+                    @DisplayNames.Money(payment.Amount) on @DisplayNames.ShortDate(payment.PaidOn), @payment.Method.Display().ToLowerInvariant()@(payment.Reference != null ? $", ref. {payment.Reference}" : "")
+                    <span class="text-muted small">· recorded by @(payment.RecordedBy?.FullName ?? "an admin")</span>
+                    <form asp-action="DeletePayment" asp-route-organizationId="@organization.Id" asp-route-paymentId="@payment.Id" asp-route-studentId="@studentId"
+                          method="post" class="d-inline" data-confirm="Remove the payment of @DisplayNames.Money(payment.Amount) on @DisplayNames.ShortDate(payment.PaidOn)? It will be owed again.">
+                        <button class="btn btn-link btn-sm text-danger p-0 ms-1" aria-label="Remove the payment of @DisplayNames.Money(payment.Amount)"><i class="bi bi-x-circle" aria-hidden="true"></i></button>
+                    </form>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (charge.CancelledAt == null)
+    {
+        <div class="charge-actions">
+            @if (charge.Balance > 0)
+            {
+                <partial name="_RecordPayment" model="@(new RecordPaymentModel(charge, today, Model.ReturnUrl))" />
+            }
+            <details class="inline-form">
+                <summary class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil" aria-hidden="true"></i> Change</summary>
+                <form asp-action="UpdateCharge" asp-route-organizationId="@organization.Id" asp-route-chargeId="@charge.Id" method="post" class="inline-form-body">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="amount-@charge.Id">Amount (€)</label>
+                        <input class="form-control form-control-sm" id="amount-@charge.Id" name="Amount" type="text" inputmode="decimal" autocomplete="off"
+                               value="@charge.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="due-@charge.Id">Due on</label>
+                        <input class="form-control form-control-sm" id="due-@charge.Id" name="DueOn" type="date" value="@charge.DueOn.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+                </form>
+            </details>
+            @if (charge.Balance > 0)
+            {
+                bool waiveRefused = Model.WaiveRefused;
+                <details class="inline-form" open="@waiveRefused">
+                    <summary class="btn btn-sm btn-outline-danger"><i class="bi bi-slash-circle" aria-hidden="true"></i> Waive</summary>
+                    <form asp-action="Waive" asp-route-organizationId="@organization.Id" asp-route-chargeId="@charge.Id" method="post" class="inline-form-body">
+                        <p class="small mb-2">Waive the @DisplayNames.Money(charge.Balance) still owed. It stays in the books, crossed out.</p>
+                        @if (waiveRefused)
+                        {
+                            <p class="text-danger small mb-2" role="alert">@Model.Page.FormError</p>
+                        }
+                        <label class="form-label small mb-1" for="reason-@charge.Id">Reason (the student sees it)</label>
+                        <input class="form-control form-control-sm mb-2" id="reason-@charge.Id" name="Reason" maxlength="@RejectionReasons.MaxLength" required value="@(waiveRefused ? Model.Page.WaiveReason : null)"
+                               placeholder="e.g. Missed classes through illness" />
+                        <button type="submit" class="btn btn-sm btn-danger w-100">Waive @DisplayNames.Money(charge.Balance)</button>
+                    </form>
+                </details>
+            }
+        </div>
+    }
+</article>

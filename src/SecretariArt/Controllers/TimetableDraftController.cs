@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SecretariArt.Extensions;
@@ -8,7 +7,7 @@ using SecretariArt.ViewModels;
 
 namespace SecretariArt.Controllers;
 
-// Milestone 5: the timetable generator. The admin chooses what to keep, the generator (OR-Tools CP-SAT) works out a
+// The timetable generator. The admin chooses what to keep, the generator (OR-Tools CP-SAT) works out a
 // draft, and the admin looks it over before anything changes: use it, or discard it.
 [Route("admin/{organizationId:int}/schedule")]
 public class TimetableDraftController(IOrganizationService organizations, ITimetableDraftService drafts, IScheduleService schedule)
@@ -32,7 +31,7 @@ public class TimetableDraftController(IOrganizationService organizations, ITimet
     [EnableRateLimiting(RateLimitPolicies.Generation)]
     public async Task<IActionResult> Generate(GenerationMode mode)
     {
-        ServiceResult result = await drafts.GenerateAsync(OrganizationId, mode, User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        ServiceResult result = await drafts.GenerateAsync(OrganizationId, mode, UserId, HttpContext.RequestAborted);
         return ReportAndRedirect(result, result.Succeeded ? nameof(Draft) : nameof(Generate));
     }
 
@@ -52,9 +51,16 @@ public class TimetableDraftController(IOrganizationService organizations, ITimet
     public async Task<IActionResult> Use()
     {
         ServiceResult result = await drafts.UseAsync(OrganizationId);
-        return result.Succeeded
-            ? ReportAndRedirect(result, nameof(ScheduleController.Index), new { controller = "Schedule" })
-            : ReportAndRedirect(result, nameof(Draft));
+        if (result.Succeeded)
+        {
+            return ReportAndRedirect(result, nameof(ScheduleController.Index), new { controller = "Schedule" });
+        }
+        // A draft that no longer fits: its page lists why already, so no banner saying it again (QA, A4).
+        if ((await drafts.GetAsync(OrganizationId))?.OutOfDate.Count > 0)
+        {
+            return RedirectToAction(nameof(Draft), OrganizationRoute());
+        }
+        return ReportAndRedirect(result, nameof(Draft));
     }
 
     [HttpPost("draft/discard")]

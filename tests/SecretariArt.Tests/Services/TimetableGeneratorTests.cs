@@ -22,6 +22,7 @@ public sealed class TimetableGeneratorTests : IDisposable
     private readonly RulesService _rules;
     private readonly ScheduleService _schedule;
     private readonly TimetableDraftService _drafts;
+    private readonly GenerationSlots _slots;
 
     private readonly int _org;
     private readonly int _otherOrg;
@@ -44,7 +45,8 @@ public sealed class TimetableGeneratorTests : IDisposable
         _rules = new RulesService(_db, _clock);
         _schedule = new ScheduleService(_db, _rules, notifications, _clock);
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Generation:TimeLimitSeconds"] = "10" }).Build();
-        _drafts = new TimetableDraftService(_db, _schedule, notifications, _clock, configuration);
+        _slots = new GenerationSlots(configuration);
+        _drafts = new TimetableDraftService(_db, _schedule, notifications, _clock, configuration, _slots);
 
         _admin = AddUser("admin");
         _org = AddOrganization("Athens");
@@ -320,6 +322,46 @@ public sealed class TimetableGeneratorTests : IDisposable
     }
 
     [Fact]
+    public async Task WhenEverySlotIsTaken_GenerationSaysTheServerIsBusy()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Generation:MaxConcurrent"] = "1", ["Generation:WaitSeconds"] = "0",
+        }).Build();
+        using var slots = new GenerationSlots(configuration);
+        var drafts = new TimetableDraftService(_db, _schedule, new NotificationService(_db, _clock), _clock, configuration, slots);
+        Assert.True(await slots.WaitAsync(CancellationToken.None));  // someone else is generating
+
+        ServiceResult result = await drafts.GenerateAsync(_org, GenerationMode.StartOver, _admin.Id);
+
+        Assert.Equal("Other timetables are being generated right now. Try again in a minute.", result.Error);
+        Assert.False(_db.ScheduleDrafts.Any());
+    }
+
+    [Fact]
+    public async Task WhenTheAdminLeaves_GenerationStopsAndSavesNothing()
+    {
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            _drafts.GenerateAsync(_org, GenerationMode.StartOver, _admin.Id, new CancellationToken(canceled: true)));
+        Assert.False(_db.ScheduleDrafts.Any());
+    }
+
+    [Fact]
+    public async Task ADraftWithADeletedGroup_NamesTheGroup()
+    {
+        await _drafts.GenerateAsync(_org, GenerationMode.FillGaps, _admin.Id);
+        Assert.Contains(_db.DraftSessions.AsNoTracking(), s => s.GroupId == _voiceA);
+
+        // Meanwhile Voice A is deleted (with its enrolment).
+        _db.Enrolments.RemoveRange(_db.Enrolments.Where(e => e.GroupId == _voiceA));
+        _db.CourseGroups.Remove(_db.CourseGroups.Single(g => g.Id == _voiceA));
+        await _db.SaveChangesAsync();
+        ServiceResult used = await _drafts.UseAsync(_org);
+
+        Assert.Contains("Voice (group A) has been deleted since (1 class in the draft).", used.Error);
+    }
+
+    [Fact]
     public async Task NothingToGenerate_SaysWhatsMissing()
     {
         Assert.Equal("There are no groups to place yet: add courses with groups on the Courses tab first.",
@@ -328,6 +370,7 @@ public sealed class TimetableGeneratorTests : IDisposable
 
     public void Dispose()
     {
+        _slots.Dispose();
         _db.Dispose();
         _connection.Dispose();
     }

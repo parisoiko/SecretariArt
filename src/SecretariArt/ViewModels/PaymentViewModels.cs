@@ -31,6 +31,24 @@ public class StatementViewModel
     public string? FormKey { get; set; }
     public string? FormError { get; set; }
     public string? WaiveReason { get; set; }
+
+    // What a course costs this student: through their bundle, or the course's own price.
+    public string PriceOf(Enrolment enrolment) =>
+        Statement.Bundled.TryGetValue(enrolment.CourseId, out Bundle? bundle)
+            ? $"in {bundle.Name} ({DisplayNames.Money(bundle.MonthlyPrice!.Value)} a month)"
+            : enrolment.Course!.Pricing switch
+            {
+                CoursePricing.Monthly => $"{DisplayNames.Money(enrolment.Course.Price)} a month",
+                CoursePricing.PerClass => $"{DisplayNames.Money(enrolment.Course.Price)} a class attended",
+                _ => "no price yet",
+            };
+}
+
+// One charge on a student's page, with its payments and what can be done to it. ReturnUrl brings the admin back to it.
+public record ChargeCardModel(Charge Charge, StatementViewModel Page, string ReturnUrl)
+{
+    // The waive form was just refused: open it again with the reason typed.
+    public bool WaiveRefused => Page.FormKey == $"waive-{Charge.Id}";
 }
 
 public class PaymentFormViewModel
@@ -104,7 +122,7 @@ public class GiveDiscountViewModel
     [Display(Name = "Percentage")]
     public decimal? Percent { get; set; }
 
-    [StringLength(200)]
+    [StringLength(StudentDiscount.ReasonMaxLength)]
     public string? Reason { get; set; }
 
     // "all", "course-5" or "bundle-3".

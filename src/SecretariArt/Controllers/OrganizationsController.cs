@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -12,7 +11,7 @@ namespace SecretariArt.Controllers;
 // Asking for a new organisation, and joining an existing one with its invite code.
 public class OrganizationsController(IOrganizationService organizations, IMembershipService memberships) : Controller
 {
-    private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private string UserId => User.UserId();
 
     [HttpGet("organizations/request")]
     public IActionResult RequestOrganization() => View(new OrganizationRequestViewModel());

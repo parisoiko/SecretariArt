@@ -1,7 +1,7 @@
 @model HomeViewModel
 @* Requests this person sent: to join an organisation, or to register one. A refusal shows its reason on demand. *@
 @{
-    var waiting = Model.Memberships.Where(m => m.Status != MembershipStatus.Active).ToList();
+    var waiting = Model.WaitingMemberships;
 }
 <section class="panel panel-pad your-requests" aria-labelledby="requests">
     <h2 id="requests">Your requests</h2>
@@ -12,7 +12,7 @@
             bool rejected = membership.Status == MembershipStatus.Rejected;
             <li class="request-card">
                 <span class="request-card-name" lang="@membership.Organization!.Name.Language()" title="@membership.Organization.Name">@membership.Organization.Name</span>
-                <p class="request-card-meta">Join as a @membership.Role.ToString().ToLowerInvariant() · sent @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
+                <p class="request-card-meta">Join as a @membership.Role.LowerName() · sent @membership.RequestedAt.ToLocalTime().ToString("d MMM")</p>
                 <partial name="_RequestStatus" model="@((rejected, membership.RejectionReason, "Waiting for approval"))" />
             </li>
         }

@@ -10,7 +10,19 @@ namespace SecretariArt.ViewModels;
 // line a block under 90 minutes has room for (default: Line2).
 public record WeekBlock(
     DayOfWeek Day, TimeOnly Starts, TimeOnly Ends, string Title, string? Line2, string? Line3, string? Url,
-    int Tone = 0, string? Alert = null, string? Note = null, string? Compact = null);
+    int Tone = 0, string? Alert = null, string? Note = null, string? Compact = null)
+{
+    // Its colour, and red for a clash or amber for a note: the classes shared by the grid and the agenda list.
+    public string StateClasses => DisplayNames.ToneClass(Tone) + (Alert != null ? " clash" : Note != null ? " note" : "");
+
+    // Shorter blocks show less text (site.css).
+    public string SizeClass => (Ends - Starts).TotalMinutes switch { < 60 => " short", < 90 => " medium", < 120 => " compact", _ => "" };
+
+    // Everything about the block, for its tooltip: the block itself may be too small to show it all.
+    public string Tooltip => $"{Title}, {DisplayNames.TimeRange(Day, Starts, Ends)}" +
+        (Line2 != null ? $", {Line2}" : "") + (Line3 != null ? $", {Line3}" : "") +
+        (Alert != null ? $". {Alert}" : "") + (Note != null ? $". {Note}" : "");
+}
 
 public class WeekGridModel
 {
@@ -24,7 +36,7 @@ public class WeekGridModel
     // A grid that fits every block, rounded out to whole hours, at least the given day.
     public static WeekGridModel Fit(IReadOnlyList<WeekBlock> blocks, IEnumerable<DayOfWeek> days, TimeOnly from, TimeOnly to, string label)
     {
-        var allDays = days.Union(blocks.Select(b => b.Day)).OrderBy(d => Array.IndexOf(DisplayNames.Week, d)).ToList();
+        var allDays = days.Union(blocks.Select(b => b.Day)).OrderBy(d => d.WeekIndex()).ToList();
         TimeOnly first = blocks.Select(b => b.Starts).Append(from).Min();
         TimeOnly last = blocks.Select(b => b.Ends).Append(to).Max();
         return new WeekGridModel
@@ -132,7 +144,17 @@ public class SessionFormViewModel
 }
 
 // The personal Schedule page (students and teachers).
-public class PersonalScheduleViewModel
+// The tabs of My schedule (the ?tab= value).
+public static class ScheduleTabs
+{
+    public const string Week = "week";
+    public const string Availability = "availability";
+    public const string Book = "book";
+    public const string CheckIns = "check-ins";
+}
+
+// A record, so the controller can fill what every tab shares once and add each tab's own data with `with`.
+public record PersonalScheduleViewModel
 {
     public required string Tab { get; init; }
     public required UserRoles Roles { get; init; }
@@ -144,7 +166,7 @@ public class PersonalScheduleViewModel
     public IReadOnlyDictionary<int, int> Tones { get; init; } = new Dictionary<int, int>();
     public IReadOnlyList<Organization> Organizations { get; init; } = [];
 
-    // Per-class courses (milestone 4): classes the student can check in to, or the teacher's classes with check-ins.
+    // Per-class courses: classes the student can check in to, or the teacher's classes with check-ins.
     // Each tab shows only when there is something in it.
     public IReadOnlyList<ClassDate> Classes { get; init; } = [];
     public bool CanBook { get; init; }
@@ -169,7 +191,7 @@ public class AvailabilityFormViewModel
     public AvailabilityInput ToInput() => new(OrganizationId!.Value, Day!.Value, From!.Value, To!.Value);
 }
 
-// Milestone 5: the "Generate a timetable" page.
+// The "Generate a timetable" page.
 public class GenerateViewModel
 {
     public required OrganizationSchedule Schedule { get; init; }

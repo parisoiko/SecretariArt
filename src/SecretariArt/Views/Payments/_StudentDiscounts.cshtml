@@ -1,0 +1,81 @@
+@model StatementViewModel
+@* The student's discounts on their payments page: the ones given, and the form to give another. *@
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var statement = Model.Statement;
+    var student = statement.Student;
+}
+<section class="form-card h-100" aria-labelledby="discounts-title">
+    <h2 class="section-title" id="discounts-title">Discounts</h2>
+    @if (statement.Discounts.Count == 0)
+    {
+        <p class="text-muted small">None.</p>
+    }
+    else
+    {
+        <ul class="slot-list mb-3">
+            @foreach (var discount in statement.Discounts)
+            {
+                <li>
+                    <span>
+                        <strong>@discount.Label</strong> @discount.EffectivePercent.ToString("0.##")%
+                        <span class="text-muted small">on @discount.AppliesTo</span>
+                    </span>
+                    <form asp-action="RemoveDiscount" asp-route-organizationId="@organization.Id" asp-route-studentDiscountId="@discount.Id" asp-route-studentId="@student.Id"
+                          method="post" class="d-inline" data-confirm="Remove the @discount.Label discount from @student.FullName?">
+                        <button class="btn btn-sm btn-link text-danger p-0" aria-label="Remove the @discount.Label discount"><i class="bi bi-x-circle" aria-hidden="true"></i> Remove</button>
+                    </form>
+                </li>
+            }
+        </ul>
+        <p class="text-muted small">Several discounts apply one after the other: 25% then 10% is 32.5% off.</p>
+    }
+
+    <form asp-action="GiveDiscount" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post" class="discount-form">
+        @if (Model.FormKey == "discount")
+        {
+            <div class="alert alert-danger py-2 small" role="alert">@Model.FormError</div>
+        }
+        <div class="row g-2">
+            <div class="col-sm-6">
+                <label class="form-label small mb-1" for="discount-kind">Discount</label>
+                <select class="form-select form-select-sm" id="discount-kind" name="Kind" required>
+                    <option value="">Choose…</option>
+                    @foreach (var named in Model.NamedDiscounts)
+                    {
+                        <option value="@named.Id" selected="@(Model.Discount.Kind == named.Id.ToString())">@named.Name (@named.Percent.ToString("0.##")%)</option>
+                    }
+                    <option value="custom" selected="@(Model.Discount.Kind == "custom")">One-off…</option>
+                </select>
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label small mb-1" for="discount-scope">On</label>
+                <select class="form-select form-select-sm" id="discount-scope" name="Scope">
+                    <option value="all">Everything</option>
+                    @foreach (var enrolment in statement.Enrolments.Where(e => e.Course!.Pricing != CoursePricing.NotSet && !statement.Bundled.ContainsKey(e.CourseId)))
+                    {
+                        <option value="course-@enrolment.CourseId" selected="@(Model.Discount.Scope == $"course-{enrolment.CourseId}")">@enrolment.Course!.Name</option>
+                    }
+                    @foreach (var bundle in statement.Bundled.Values.DistinctBy(b => b.Id))
+                    {
+                        <option value="bundle-@bundle.Id" selected="@(Model.Discount.Scope == $"bundle-{bundle.Id}")">@bundle.Name (bundle)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-4 custom-only">
+                <label class="form-label small mb-1" for="discount-percent">%</label>
+                <input class="form-control form-control-sm" id="discount-percent" name="Percent" type="text" inputmode="decimal" autocomplete="off" value="@(ViewData.ModelState["Percent"]?.AttemptedValue ?? Model.Discount.Percent?.ToString(System.Globalization.CultureInfo.InvariantCulture))" />
+            </div>
+            <div class="col-8 custom-only">
+                <label class="form-label small mb-1" for="discount-reason">Reason</label>
+                <input class="form-control form-control-sm" id="discount-reason" name="Reason" maxlength="@StudentDiscount.ReasonMaxLength" value="@Model.Discount.Reason" placeholder="e.g. Teacher's child" />
+            </div>
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary mt-2">Give discount</button>
+        @if (Model.NamedDiscounts.Count == 0)
+        {
+            <p class="text-muted small mt-2 mb-0">Discounts you give often (siblings, scholarships) can be named on
+                <a asp-action="Settings" asp-route-organizationId="@organization.Id">Settings &amp; discounts</a>.</p>
+        }
+    </form>
+</section>

@@ -1,0 +1,34 @@
+@model StatementViewModel
+@* A one-off charge for one student (a registration fee, materials, an exam fee). *@
+@{
+    var organization = (Organization)ViewData["Organization"]!;
+    var student = Model.Statement.Student;
+}
+<section class="form-card h-100" aria-labelledby="charge-title">
+    <h2 class="section-title" id="charge-title">Add a one-off charge</h2>
+    <p class="text-muted small">E.g. a registration fee, materials or an exam fee. The student is told.</p>
+    <form asp-action="AddCharge" asp-route-organizationId="@organization.Id" asp-route-studentId="@student.Id" method="post">
+        @if (Model.FormKey == "charge" && !string.IsNullOrEmpty(Model.FormError))
+        {
+            <div class="alert alert-danger py-2 small" role="alert">@Model.FormError</div>
+        }
+        <div class="mb-2">
+            <label asp-for="NewCharge.Description" class="form-label small mb-1"></label>
+            <input asp-for="NewCharge.Description" class="form-control form-control-sm" placeholder="e.g. Registration fee 2026–27" />
+            <span asp-validation-for="NewCharge.Description" class="invalid-feedback d-block"></span>
+        </div>
+        <div class="row g-2">
+            <div class="col-6">
+                <label asp-for="NewCharge.Amount" class="form-label small mb-1"></label>
+                <input asp-for="NewCharge.Amount" class="form-control form-control-sm" type="text" inputmode="decimal" autocomplete="off" />
+                <span asp-validation-for="NewCharge.Amount" class="invalid-feedback d-block"></span>
+            </div>
+            <div class="col-6">
+                <label asp-for="NewCharge.DueOn" class="form-label small mb-1"></label>
+                <input asp-for="NewCharge.DueOn" class="form-control form-control-sm" type="date" />
+                <span asp-validation-for="NewCharge.DueOn" class="invalid-feedback d-block"></span>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary mt-2">Add charge</button>
+    </form>
+</section>

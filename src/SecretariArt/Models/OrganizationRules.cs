@@ -1,7 +1,7 @@
 namespace SecretariArt.Models;
 
-// The organisation's timetabling rules. Courses are checked against them now; the schedule editor (milestone 3) and the
-// automatic generator (milestone 5) place sessions within them. One row per organisation, created on first save.
+// The organisation's timetabling rules: courses are checked against them, and the schedule editor and the generator
+// place classes within them. One row per organisation, created on first save.
 public class OrganizationRules
 {
     public int Id { get; set; }
@@ -31,6 +31,17 @@ public class OrganizationRules
     public DateOnly? TermEnds { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+}
+
+public static class TermExtensions
+{
+    // No term dates means "always": an organisation that hasn't set a term isn't limited by one. Null rules too.
+    public static bool InTerm(this OrganizationRules? rules, DateOnly date) =>
+        (rules?.TermStarts == null || date >= rules.TermStarts) && (rules?.TermEnds == null || date <= rules.TermEnds);
+
+    // Whether the term runs on any day of this month.
+    public static bool TermRunsIn(this OrganizationRules? rules, DateOnly month) =>
+        (rules?.TermStarts == null || rules.TermStarts <= month.AddMonths(1).AddDays(-1)) && (rules?.TermEnds == null || rules.TermEnds >= month);
 }
 
 // Sensible defaults for an arts school until the admin saves their own.

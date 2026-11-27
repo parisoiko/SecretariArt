@@ -98,11 +98,12 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         builder.Entity<DraftSession>(session =>
         {
             session.Property(s => s.Day).HasConversion<string>().HasMaxLength(10);
+            session.Property(s => s.GroupLabel).HasMaxLength(250);
             session.HasOne(s => s.Draft).WithMany(d => d.Sessions).HasForeignKey(s => s.DraftId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<DraftGap>(gap =>
         {
-            gap.Property(g => g.Reason).HasMaxLength(500);
+            gap.Property(g => g.Reason).HasMaxLength(TextLimits.Long);
             gap.HasOne(g => g.Draft).WithMany(d => d.Gaps).HasForeignKey(g => g.DraftId).OnDelete(DeleteBehavior.Cascade);
         });
     }
@@ -134,7 +135,7 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
         builder.Entity<StudentDiscount>(discount =>
         {
             discount.Property(d => d.Percent).HasPrecision(5, 2);
-            discount.Property(d => d.Reason).HasMaxLength(200);
+            discount.Property(d => d.Reason).HasMaxLength(StudentDiscount.ReasonMaxLength);
             discount.HasIndex(d => new { d.OrganizationId, d.StudentId });
             discount.HasOne(d => d.Student).WithMany().HasForeignKey(d => d.StudentId).OnDelete(DeleteBehavior.Restrict);
             discount.HasOne(d => d.Discount).WithMany().HasForeignKey(d => d.DiscountId).OnDelete(DeleteBehavior.Restrict);
@@ -207,7 +208,7 @@ public class SecretariArtDbContext(DbContextOptions<SecretariArtDbContext> optio
 
         builder.Entity<Notification>(notification =>
         {
-            notification.Property(n => n.Text).HasMaxLength(500);
+            notification.Property(n => n.Text).HasMaxLength(TextLimits.Long);
             notification.Property(n => n.Url).HasMaxLength(300);
             notification.HasIndex(n => new { n.UserId, n.ReadAt });
             notification.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)

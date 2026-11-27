@@ -25,7 +25,7 @@ public record DraftView(ScheduleDraft Draft, ScheduleContext Context, IReadOnlyL
 
 public interface ITimetableDraftService
 {
-    Task<ServiceResult> GenerateAsync(int organizationId, GenerationMode mode, string userId);
+    Task<ServiceResult> GenerateAsync(int organizationId, GenerationMode mode, string userId, CancellationToken cancellationToken = default);
     Task<DraftView?> GetAsync(int organizationId);
     Task<bool> ExistsAsync(int organizationId);
     Task<ServiceResult> UseAsync(int organizationId);
@@ -33,13 +33,14 @@ public interface ITimetableDraftService
 }
 
 public class TimetableDraftService(
-    SecretariArtDbContext db, IScheduleService schedule, INotificationService notifications, TimeProvider clock, IConfiguration configuration)
+    SecretariArtDbContext db, IScheduleService schedule, INotificationService notifications, TimeProvider clock, IConfiguration configuration,
+    GenerationSlots slots)
     : ITimetableDraftService
 {
     // Long enough for a school's week; the solver stops sooner when it has proved its answer is the best.
     private TimeSpan TimeLimit => TimeSpan.FromSeconds(configuration.GetValue("Generation:TimeLimitSeconds", 20.0));
 
-    public async Task<ServiceResult> GenerateAsync(int organizationId, GenerationMode mode, string userId)
+    public async Task<ServiceResult> GenerateAsync(int organizationId, GenerationMode mode, string userId, CancellationToken cancellationToken = default)
     {
         ScheduleContext context = await schedule.LoadContextAsync(organizationId);
         if (context.Groups.Count == 0)
@@ -55,8 +56,21 @@ public class TimetableDraftService(
             return ServiceResult.Fail("Every group already has all its classes. To try a different week, choose “Start over”.");
         }
 
-        // CPU work for a few seconds: off the request thread, so the server keeps answering others meanwhile.
-        TimetablePlan plan = await Task.Run(() => TimetableGenerator.Plan(context, mode, TimeLimit));
+        // Only a few runs at a time across the whole server (GenerationSlots); the rest wait their turn briefly.
+        if (!await slots.WaitAsync(cancellationToken))
+        {
+            return ServiceResult.Fail("Other timetables are being generated right now. Try again in a minute.");
+        }
+        TimetablePlan plan;
+        try
+        {
+            // CPU work for a few seconds: off the request thread, so the server keeps answering others meanwhile.
+            plan = await Task.Run(() => TimetableGenerator.Plan(context, mode, TimeLimit, cancellationToken), cancellationToken);
+        }
+        finally
+        {
+            slots.Release();
+        }
 
         await db.ScheduleDrafts.Where(d => d.OrganizationId == organizationId).ExecuteDeleteAsync();
         var draft = new ScheduleDraft
@@ -66,10 +80,11 @@ public class TimetableDraftService(
             Sessions = plan.Sessions.Select(p => new DraftSession
             {
                 GroupId = p.GroupId, ClassroomId = p.ClassroomId, Day = p.Day, Starts = p.Starts, Ends = p.Ends,
+                GroupLabel = context.Group(p.GroupId)?.Title() ?? "",
             }).ToList(),
             Gaps = plan.Gaps.Select(g => new DraftGap
             {
-                GroupId = g.GroupId, Missing = g.Missing, Reason = g.Reason.Length > 500 ? g.Reason[..499] + "…" : g.Reason,
+                GroupId = g.GroupId, Missing = g.Missing, Reason = DisplayNames.Truncate(g.Reason, TextLimits.Long),
             }).ToList(),
         };
         db.ScheduleDrafts.Add(draft);
@@ -164,15 +179,19 @@ public class TimetableDraftService(
         var kept = draft.Mode == GenerationMode.FillGaps ? context.Sessions.ToList() : [];
         var outOfDate = new List<string>();
         var planned = new List<ClassSession>();
-        int noGroup = draft.Sessions.Count(s => context.Group(s.GroupId) == null);
-        if (noGroup > 0)
+        foreach (var gone in draft.Sessions.Where(s => context.Group(s.GroupId) == null).GroupBy(s => s.GroupId))
         {
-            outOfDate.Add($"{DisplayNames.Plural(noGroup, "class", "classes")} in it {(noGroup == 1 ? "belongs" : "belong")} to a group deleted since.");
+            int count = gone.Count();
+            string label = gone.First().GroupLabel;
+            outOfDate.Add(label.Length > 0
+                ? $"{label} has been deleted since ({DisplayNames.Plural(count, "class", "classes")} in the draft)."
+                // Drafts made before groups' names were stored.
+                : $"{DisplayNames.Plural(count, "class", "classes")} in it {(count == 1 ? "belongs" : "belong")} to a group deleted since.");
         }
         foreach (var room in draft.Sessions.Where(s => context.Group(s.GroupId) != null && context.Room(s.ClassroomId) == null).GroupBy(s => s.ClassroomId))
         {
             var group = context.Group(room.First().GroupId)!;
-            outOfDate.Add($"The classroom it gives {group.Course!.Name} (group {group.Name}) has been deleted since.");
+            outOfDate.Add($"The classroom it gives {group.Title()} has been deleted since.");
         }
         foreach (DraftSession s in draft.Sessions)
         {
@@ -200,7 +219,7 @@ public class TimetableDraftService(
             // class breaking a rule means the draft is out of date.
             if (isNew && check.Problems.Count > 0)
             {
-                outOfDate.Add($"{group.Course!.Name} (group {group.Name}) on {session.Day} {session.Starts:HH:mm}: {check.Problems[0]}");
+                outOfDate.Add($"{group.Title()} on {session.Day} {session.Starts:HH:mm}: {check.Problems[0]}");
             }
         }
 
@@ -208,7 +227,7 @@ public class TimetableDraftService(
             .Where(x => x.Group != null)
             .Select(x => new DraftGapView(x.Group!, x.Gap.Missing, x.Gap.Reason)).ToList();
         return new DraftView(draft, context,
-            classes.OrderBy(c => Array.IndexOf(DisplayNames.Week, c.Session.Day)).ThenBy(c => c.Session.Starts).ToList(),
+            classes.OrderBy(c => c.Session.Day.WeekIndex()).ThenBy(c => c.Session.Starts).ToList(),
             gaps, outOfDate.Distinct().ToList());
     }
 
@@ -249,11 +268,11 @@ public class TimetableDraftService(
         foreach (var (person, classes) in byPerson)
         {
             // Like the single-class notices: course and group, day, time and room (QA, G3). The rest on their Schedule.
-            var described = classes.OrderBy(s => Array.IndexOf(DisplayNames.Week, s.Day)).ThenBy(s => s.Starts)
+            var described = classes.OrderBy(s => s.Day.WeekIndex()).ThenBy(s => s.Starts)
                 .Select(s =>
                 {
                     CourseGroup group = context.Group(s.GroupId)!;
-                    return $"{group.Course!.Name} (group {group.Name}) {s.Day} {s.Starts:HH:mm}–{s.Ends:HH:mm} in {context.Room(s.ClassroomId)?.Name}";
+                    return $"{group.Title()} {s.When()} in {context.Room(s.ClassroomId)?.Name}";
                 }).ToList();
             string list = described.Count == 0 ? "" :
                 string.Join("; ", described.Take(3)) + (described.Count > 3 ? $"; and {described.Count - 3} more on your Schedule." : ".");
@@ -266,7 +285,7 @@ public class TimetableDraftService(
                 : described.Count == 1
                     ? $"{organization}: New class: {list}"
                     : $"{organization}: New classes: {list}";
-            notifications.Add([person], context.Organization.Id, text.Length > 500 ? text[..497] + "…" : text, "/schedule");
+            notifications.Add([person], context.Organization.Id, DisplayNames.Truncate(text, TextLimits.Long), "/schedule");
         }
     }
 }

@@ -38,7 +38,7 @@ public interface IScheduleService
     // to tell the admin how many classes it just flagged.
     Task<IReadOnlyDictionary<int, int>> FlagsAsync(int organizationId);
 
-    // Everything the conflict checks need, for the timetable generator (milestone 5).
+    // Everything the conflict checks need: for the timetable generator and drafts.
     Task<ScheduleContext> LoadContextAsync(int organizationId);
 }
 
@@ -47,10 +47,10 @@ public class ScheduleService(
 {
     public async Task<OrganizationSchedule> GetAsync(int organizationId)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         var sessions = context.Sessions
             .Select(s => View(context, s))
-            .OrderBy(v => Array.IndexOf(DisplayNames.Week, v.Session.Day)).ThenBy(v => v.Session.Starts)
+            .OrderBy(v => v.Session.Day.WeekIndex()).ThenBy(v => v.Session.Starts)
             .ToList();
         var groups = context.Groups
             .Select(g => new GroupProgress(g, context.Sessions.Count(s => s.GroupId == g.Id)))
@@ -61,27 +61,27 @@ public class ScheduleService(
 
     public async Task<IReadOnlyDictionary<int, int>> FlagsAsync(int organizationId)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         return context.Sessions.Select(s => View(context, s))
             .ToDictionary(v => v.Session.Id, v => v.Problems.Count + v.Warnings.Count);
     }
 
     public async Task<SessionView?> FindAsync(int organizationId, int sessionId)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         ClassSession? session = context.Sessions.FirstOrDefault(s => s.Id == sessionId);
         return session == null ? null : View(context, session);
     }
 
     public async Task<ScheduleCheck?> CheckAsync(int organizationId, SessionInput input, int? sessionId)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         return Check(context, input, sessionId);
     }
 
     public async Task<ServiceResult> CreateAsync(int organizationId, SessionInput input)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         if (Check(context, input, null) is not ScheduleCheck check)
         {
             return NotFound;
@@ -99,15 +99,15 @@ public class ScheduleService(
             Day = input.Day, Starts = input.Starts, Ends = check.Ends, UpdatedAt = Now,
         };
         db.ClassSessions.Add(session);
-        Notify(context, group, $"New class: {Title(group)} on {When(session)} in {room.Name}.");
+        Notify(context, group, $"New class: {group.Title()} on {session.When()} in {room.Name}.");
         await db.SaveChangesAsync();
-        return Saved($"{Title(group)} added on {When(session)} in {room.Name}.", check, session.Id);
+        return Saved($"{group.Title()} added on {session.When()} in {room.Name}.", check, session.Id);
     }
 
     // Moves a session (day, time, room). The group stays: a different group is a different session.
     public async Task<ServiceResult> UpdateAsync(int organizationId, int sessionId, SessionInput input)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         ClassSession? session = await db.ClassSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.OrganizationId == organizationId);
         if (session == null)
         {
@@ -126,32 +126,32 @@ public class ScheduleService(
 
         CourseGroup group = context.Group(session.GroupId)!;
         Classroom room = context.Room(input.ClassroomId)!;
-        string before = $"{When(session)} in {context.Room(session.ClassroomId)?.Name}";
+        string before = $"{session.When()} in {context.Room(session.ClassroomId)?.Name}";
         // A new day or time makes upcoming check-ins wrong (a new room alone doesn't): they're cancelled and the
         // students told. Decided on the class's present time, before it moves.
         int cancelled = (input.Day, input.Starts) == (session.Day, session.Starts) ? 0
             : await BookingService.CancelUpcomingAsync(db, notifications, clock, [session.Id],
-                $"the class moved to {input.Day} {input.Starts:HH:mm}–{check.Ends:HH:mm}");
+                $"the class moved to {DisplayNames.TimeRange(input.Day, input.Starts, check.Ends)}");
         session.Day = input.Day;
         session.Starts = input.Starts;
         session.Ends = check.Ends;
         session.ClassroomId = room.Id;
         session.UpdatedAt = Now;
-        string after = $"{When(session)} in {room.Name}";
+        string after = $"{session.When()} in {room.Name}";
         if (before == after)
         {
             return ServiceResult.Ok("Nothing changed.");
         }
 
-        Notify(context, group, $"{Title(group)} moved from {before} to {after}.");
+        Notify(context, group, $"{group.Title()} moved from {before} to {after}.");
         await db.SaveChangesAsync();
-        return Saved($"{Title(group)} moved to {after}. Its teacher and students have been told." +
+        return Saved($"{group.Title()} moved to {after}. Its teacher and students have been told." +
             (cancelled > 0 ? $" {DisplayNames.Plural(cancelled, "upcoming check-in")} {(cancelled == 1 ? "was" : "were")} cancelled." : ""), check);
     }
 
     public async Task<ServiceResult> DeleteAsync(int organizationId, int sessionId)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         ClassSession? session = await db.ClassSessions.FirstOrDefaultAsync(s => s.Id == sessionId && s.OrganizationId == organizationId);
         if (session == null)
         {
@@ -161,9 +161,9 @@ public class ScheduleService(
         CourseGroup group = context.Group(session.GroupId)!;
         int cancelled = await BookingService.CancelUpcomingAsync(db, notifications, clock, [session.Id], "the class was taken off the timetable");
         db.ClassSessions.Remove(session);
-        Notify(context, group, $"{Title(group)} on {When(session)} has been taken off the timetable.");
+        Notify(context, group, $"{group.Title()} on {session.When()} has been taken off the timetable.");
         await db.SaveChangesAsync();
-        return ServiceResult.Ok($"{Title(group)} on {When(session)} removed. Its teacher and students have been told." +
+        return ServiceResult.Ok($"{group.Title()} on {session.When()} removed. Its teacher and students have been told." +
             (cancelled > 0 ? $" {DisplayNames.Plural(cancelled, "upcoming check-in")} {(cancelled == 1 ? "was" : "were")} cancelled." : ""));
     }
 
@@ -171,7 +171,7 @@ public class ScheduleService(
     // free. Slots without warnings come first (e.g. inside the teacher's availability).
     public async Task<List<Suggestion>> SuggestAsync(int organizationId, int groupId, int perDay = 3)
     {
-        ScheduleContext context = await LoadAsync(organizationId);
+        ScheduleContext context = await LoadContextAsync(organizationId);
         CourseGroup? group = context.Group(groupId);
         if (group == null)
         {
@@ -210,7 +210,7 @@ public class ScheduleService(
         var meets = context.Sessions.Where(s => s.GroupId == group.Id).Select(s => s.Day).ToHashSet();
         return found
             .GroupBy(s => s.Day)
-            .OrderBy(d => meets.Contains(d.Key)).ThenBy(d => Array.IndexOf(DisplayNames.Week, d.Key))
+            .OrderBy(d => meets.Contains(d.Key)).ThenBy(d => d.Key.WeekIndex())
             .SelectMany(d => d
                 .OrderBy(s => s.Warnings.Count)
                 .ThenBy(s => s.Starts.Minute == 0 ? 0 : 1)
@@ -224,7 +224,7 @@ public class ScheduleService(
     public async Task<List<PersonalSession>> GetPersonalAsync(string userId)
     {
         var memberships = await db.Memberships.AsNoTracking()
-            .Where(m => m.UserId == userId && m.Status == MembershipStatus.Active && m.Organization!.Status == OrganizationStatus.Active)
+            .Live().Where(m => m.UserId == userId)
             .Select(m => new { m.OrganizationId, m.Role }).ToListAsync();
         var teachingIn = memberships.Where(m => m.Role == MembershipRole.Teacher).Select(m => m.OrganizationId).ToHashSet();
         var studyingIn = memberships.Where(m => m.Role == MembershipRole.Student).Select(m => m.OrganizationId).ToHashSet();
@@ -250,7 +250,7 @@ public class ScheduleService(
                     : $"Clashes with {other.Session.Group!.Course!.Name} at {organizations[other.Session.OrganizationId].Name} ({other.Session.Starts:HH:mm}–{other.Session.Ends:HH:mm}).";
                 return new PersonalSession(entry.Session, organizations[entry.Session.OrganizationId], entry.Teaching, clash);
             })
-            .OrderBy(p => Array.IndexOf(DisplayNames.Week, p.Session.Day)).ThenBy(p => p.Session.Starts)
+            .OrderBy(p => p.Session.Day.WeekIndex()).ThenBy(p => p.Session.Starts)
             .ToList();
     }
 
@@ -293,13 +293,7 @@ public class ScheduleService(
     private static ServiceResult Saved(string message, ScheduleCheck check, int? createdId = null) =>
         ServiceResult.Ok(check.Warnings.Count == 0 ? message : $"{message} Note: {string.Join(" ", check.Warnings)}", createdId);
 
-    private static string Title(CourseGroup group) => $"{group.Course!.Name} (group {group.Name})";
-
-    private static string When(ClassSession session) => $"{session.Day} {session.Starts:HH:mm}–{session.Ends:HH:mm}";
-
-    public Task<ScheduleContext> LoadContextAsync(int organizationId) => LoadAsync(organizationId);
-
-    internal async Task<ScheduleContext> LoadAsync(int organizationId)
+    public async Task<ScheduleContext> LoadContextAsync(int organizationId)
     {
         Organization organization = await db.Organizations.AsNoTracking().FirstAsync(o => o.Id == organizationId);
         OrganizationRules rules = await rulesService.GetAsync(organizationId);

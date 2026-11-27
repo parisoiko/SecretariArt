@@ -64,6 +64,29 @@ public static class DisplayNames
 
     public static string Short(this DayOfWeek day) => day.ToString()[..3];
 
+    // Monday 0 … Sunday 6: a day's place in the timetable week (DayOfWeek counts from Sunday).
+    public static int WeekIndex(this DayOfWeek day) => ((int)day + 6) % 7;
+
+    // "Acting (group A)": how a group is named in messages and notifications.
+    public static string Title(this CourseGroup group) => $"{group.Course?.Name} (group {group.Name})";
+
+    // "Tuesday 18:00–19:30".
+    public static string TimeRange(DayOfWeek day, TimeOnly from, TimeOnly to) => $"{day} {from:HH:mm}–{to:HH:mm}";
+
+    public static string When(this ClassSession session) => TimeRange(session.Day, session.Starts, session.Ends);
+
+    // Cut to fit a column of this many characters, with "…" when it was cut.
+    public static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..(maxLength - 1)] + "…";
+
+    // Colours for organisations (and draft states) in the week views: site.css defines tone-0 to tone-5.
+    public const int ToneCount = 6;
+
+    public static string ToneClass(int tone) => $"tone-{tone % ToneCount}";
+
+    // "teacher": for sentences ("join as a teacher") and CSS classes (role-teacher).
+    public static string LowerName(this MembershipRole role) => role.ToString().ToLowerInvariant();
+
     // "1 course", "3 courses".
     public static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
 
@@ -76,6 +99,7 @@ public static class DisplayNames
     // "Thu 27 Nov", "Thursday 27 November", "November 2026".
     public static string ShortDate(DateOnly date) => date.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     public static string LongDate(DateOnly date) => date.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+    public static string DayAndDate(DateOnly date) => date.ToString("dddd, d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     public static string MonthName(DateOnly month) => month.ToString("MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
 
     // "1 h 30 min", "45 min", "2 h".
@@ -90,4 +114,11 @@ public static class DisplayNames
     // lang="el" lets the browser apply Greek rules ("ΘΕΣΣΑΛΟΝΙΚΗ"). Returns null (no attribute) for anything else.
     public static string? Language(this string? text) =>
         text != null && text.Any(c => c is >= 'Ͱ' and <= 'Ͽ' or >= 'ἀ' and <= '῿') ? "el" : null;
+}
+
+// Column sizes shared by the database schema and the code that fills those columns.
+public static class TextLimits
+{
+    // Notifications, and the reasons a draft gives for classes it couldn't place.
+    public const int Long = 500;
 }

@@ -16,7 +16,7 @@ public class Course
 
     public RoomFeatures RequiredFeatures { get; set; }
 
-    // Milestone 4: how it is paid for (see CoursePricing). Price is per month or per class.
+    // How it is paid for (see CoursePricing). Price is per month or per class.
     public CoursePricing Pricing { get; set; }
     public decimal Price { get; set; }
 
