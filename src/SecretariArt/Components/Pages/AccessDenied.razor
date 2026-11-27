@@ -1,0 +1,15 @@
+@page "/account/access-denied"
+@attribute [AllowAnonymous]
+@layout AnyoneLayout
+
+@* Where sign-in sends someone who is signed in but not allowed on a page (CookieAuthenticationOptions.AccessDeniedPath
+   in Extensions/ServiceCollectionExtensions.cs). Replaces AccountController.AccessDenied and its view. *@
+
+<PageTitle>No access · SecretariArt</PageTitle>
+
+<div class="empty-state">
+    <i class="bi bi-lock" aria-hidden="true"></i>
+    <h1>You don't have access to this page</h1>
+    <p>It belongs to an organisation or role you're not part of.</p>
+    <a class="btn btn-primary" href="/">Back to home</a>
+</div>

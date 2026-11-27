@@ -14,6 +14,25 @@ public class HostingTests(SecretariArtFactory factory)
         Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
     }
 
+    // A Blazor page for a signed-in person has the app's layout (Components/Layout/MainLayout.razor), and its sign-out
+    // form, which posts to the MVC action, carries a token MVC accepts.
+    [Fact]
+    public async Task BlazorPages_UseTheMainLayout_WhoseSignOutWorks()
+    {
+        HttpClient eleni = factory.CreateBrowser();
+        await eleni.SignInAsync("eleni@demo.secretariart.app");
+
+        string page = await eleni.GetStringAsync("/account/access-denied");
+        Assert.Contains("have access to this page", page);
+        Assert.Contains("Account menu for Eleni", page);
+        Assert.Contains("<a href=\"admin\" class=\"nav-link\">", page);
+
+        HttpResponseMessage signedOut = await eleni.SubmitFormAsync("/account/access-denied", "/account/logout", []);
+        Assert.Equal("/account/login", signedOut.RequestMessage!.RequestUri!.AbsolutePath);
+        // Her browser is signed out: Home sends it to sign in.
+        Assert.Equal("/account/login", (await eleni.GetAsync("/")).RequestMessage!.RequestUri!.AbsolutePath);
+    }
+
     // Error pages are a Blazor page (Components/Pages/Error.razor), reached by re-executing the failed request.
     [Fact]
     public async Task ErrorPages_ShowTheFriendlyPage_ForVisitorsAndSignedInPeople()

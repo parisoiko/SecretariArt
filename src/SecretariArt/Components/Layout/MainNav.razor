@@ -1,0 +1,70 @@
+@using System.Security.Claims
+@using SecretariArt.Authorization
+@inject ICurrentUserMemberships CurrentMemberships
+@inject INotificationService Notifications
+
+@*
+    The sections a person sees depend on their roles across all organisations; the bell shows unread notifications.
+    The Blazor version of the MainNav view component (ViewComponents/MainNavViewComponent.cs and its view).
+    NavLink marks the link of the current page "active" from the URL; the MVC version worked it out from the
+    controller's name.
+*@
+<ul class="navbar-nav me-auto main-links">
+    <li class="nav-item"><NavLink class="nav-link" href="" Match="NavLinkMatch.All"><i class="bi bi-house" aria-hidden="true"></i> Home</NavLink></li>
+    @* Schedule and Payments are personal (a timetable, payment deadlines): an admin-only account has neither;
+       its schedule tools live under Administration. *@
+    @if (roles.IsTeacher || roles.IsStudent)
+    {
+        <li class="nav-item"><NavLink class="nav-link" href="schedule"><i class="bi bi-calendar3" aria-hidden="true"></i> Schedule</NavLink></li>
+    }
+    @if (roles.IsStudent)
+    {
+        <li class="nav-item"><NavLink class="nav-link" href="payments"><i class="bi bi-wallet2" aria-hidden="true"></i> Payments</NavLink></li>
+    }
+    @if (roles.IsAdmin)
+    {
+        <li class="nav-item"><NavLink class="nav-link" href="admin"><i class="bi bi-sliders" aria-hidden="true"></i> Administration</NavLink></li>
+    }
+    @if (isPlatformAdmin)
+    {
+        <li class="nav-item"><NavLink class="nav-link" href="platform/organizations"><i class="bi bi-shield-check" aria-hidden="true"></i> Platform</NavLink></li>
+    }
+</ul>
+@* Notifications go to teachers and students; anyone else would see a bell that never rings. Shown anyway if something
+   is unread, e.g. for someone who has since left their last class. On the right, with the account. *@
+@if (roles.IsTeacher || roles.IsStudent || unread > 0)
+{
+    <ul class="navbar-nav bell-nav">
+        <li class="nav-item">
+            <NavLink class="nav-link bell-link" href="notifications" aria-label="@BellLabel" title="@BellLabel">
+                <i class="bi @(unread > 0 ? "bi-bell-fill" : "bi-bell")" aria-hidden="true"></i>
+                <span class="d-lg-none">Notifications</span>
+                @if (unread > 0)
+                {
+                    <span class="bell-count" aria-hidden="true">@(unread > 99 ? "99+" : unread)</span>
+                }
+            </NavLink>
+        </li>
+    </ul>
+}
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private UserRoles roles = new(false, false, false);
+    private bool isPlatformAdmin;
+    private int unread;
+
+    private string BellLabel => unread == 0 ? "Notifications" : $"Notifications, {unread} new";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ClaimsPrincipal user = HttpContext.User;
+        roles = await CurrentMemberships.GetRolesAsync();
+        isPlatformAdmin = user.IsInRole(Policies.PlatformAdminRole);
+        if (user.FindFirstValue(ClaimTypes.NameIdentifier) is string userId)
+        {
+            unread = await Notifications.UnreadCountAsync(userId);
+        }
+    }
+}

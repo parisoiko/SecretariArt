@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+
+@*
+    For pages anyone can reach (error pages, "no access"): signed-in people get the app's navigation, visitors the
+    sign-in layout. A page names one layout with @layout, so this layout chooses between the two at run time and
+    renders the page inside the chosen one with LayoutView. (The MVC view set Layout from User.Identity.)
+*@
+<LayoutView Layout="@(signedIn ? typeof(MainLayout) : typeof(AuthLayout))">
+    @Body
+</LayoutView>
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private bool signedIn;
+
+    protected override void OnInitialized() => signedIn = HttpContext.User.Identity?.IsAuthenticated == true;
+}

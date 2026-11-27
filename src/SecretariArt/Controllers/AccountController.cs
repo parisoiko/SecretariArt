@@ -199,9 +199,6 @@ public class AccountController(
         return View(model);
     }
 
-    [HttpGet("access-denied")]
-    public IActionResult AccessDenied() => View();
-
     private static string DecodeCode(string code)
     {
         try
